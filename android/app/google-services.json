@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "686646627268",
+    "project_id": "beauty-salon-app-6f1d1",
+    "storage_bucket": "beauty-salon-app-6f1d1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:686646627268:android:8bacebb9ab917f099d7291",
+        "android_client_info": {
+          "package_name": "com.example.beauty_salon_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDYGpIOwh_h0655fl85eN97zjb7r4ZSwKo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
