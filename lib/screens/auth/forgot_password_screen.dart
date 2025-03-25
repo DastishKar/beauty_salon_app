@@ -72,96 +72,97 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final localizations = AppLocalizations.of(context);
-    
-    return LoadingOverlay(
-      isLoading: _isLoading,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(localizations.password_reset),
+  @override
+Widget build(BuildContext context) {
+  final localizations = AppLocalizations.of(context);
+  
+  return LoadingOverlay(
+    isLoading: _isLoading,
+    child: Scaffold(
+      appBar: AppBar(
+        title: Text(localizations.passwordReset), // Исправлено с password_reset
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: _resetSent
+              ? _buildSuccessView(localizations)
+              : _buildResetForm(localizations),
         ),
-        body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: _resetSent
-                ? _buildSuccessView(localizations)
-                : _buildResetForm(localizations),
-          ),
+      ),
+    ),
+  );
+}
+
+// Форма для ввода email
+Widget _buildResetForm(AppLocalizations localizations) {
+  return Form(
+    key: _formKey,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Заголовок и инструкция
+        Text(
+          localizations.passwordReset, // Исправлено
+          style: Theme.of(context).textTheme.headlineMedium,
         ),
-      ),
-    );
-  }
+        const SizedBox(height: 16),
+        Text(
+          localizations.passwordResetInstructions, // Исправлено
+          style: Theme.of(context).textTheme.bodyLarge,
+        ),
+        const SizedBox(height: 32),
+        
+        // Поле для ввода email
+        TextFormField(
+          controller: _emailController,
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.done,
+          decoration: InputDecoration(
+            labelText: localizations.email,
+            prefixIcon: const Icon(Icons.email),
+          ),
+          validator: Validators.validateEmail,
+          onFieldSubmitted: (_) => _resetPassword(),
+        ),
+        const SizedBox(height: 32),
+        
+        // Кнопка отправки
+        ElevatedButton(
+          onPressed: _resetPassword,
+          child: Text(localizations.sendInstructions), // Исправлено
+        ),
+      ],
+    ),
+  );
+}
 
-  // Форма для ввода email
-  Widget _buildResetForm(AppLocalizations localizations) {
-    return Form(
-      key: _formKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Заголовок и инструкция
-          Text(
-            localizations.password_reset,
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            localizations.password_reset_instructions,
-            style: Theme.of(context).textTheme.bodyLarge,
-          ),
-          const SizedBox(height: 32),
-          
-          // Поле для ввода email
-          TextFormField(
-            controller: _emailController,
-            keyboardType: TextInputType.emailAddress,
-            textInputAction: TextInputAction.done,
-            decoration: InputDecoration(
-              labelText: localizations.email,
-              prefixIcon: const Icon(Icons.email),
-            ),
-            validator: Validators.validateEmail,
-            onFieldSubmitted: (_) => _resetPassword(),
-          ),
-          const SizedBox(height: 32),
-          
-          // Кнопка отправки
-          ElevatedButton(
-            onPressed: _resetPassword,
-            child: Text(localizations.send_instructions),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Экран успешной отправки инструкций
-  Widget _buildSuccessView(AppLocalizations localizations) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.check_circle_outline,
-            color: Colors.green,
-            size: 72,
-          ),
-          const SizedBox(height: 24),
-          Text(
-            localizations.password_reset_sent,
-            style: Theme.of(context).textTheme.titleLarge,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 32),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
-            child: Text(localizations.ok),
-          ),
-        ],
-      ),
-    );
-  }
+// Экран успешной отправки инструкций
+Widget _buildSuccessView(AppLocalizations localizations) {
+  return Center(
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(
+          Icons.check_circle_outline,
+          color: Colors.green,
+          size: 72,
+        ),
+        const SizedBox(height: 24),
+        Text(
+          localizations.passwordResetSent, // Исправлено
+          style: Theme.of(context).textTheme.titleLarge,
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 32),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+          },
+          child: Text(localizations.ok), // Исправлено
+        ),
+      ],
+    ),
+  );
+}
 }

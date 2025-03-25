@@ -140,7 +140,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       isLoading: _isLoading,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(localizations.my_profile),
+          title: Text(localizations.myProfile),
           automaticallyImplyLeading: false,
         ),
         body: SafeArea(
@@ -208,7 +208,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                '${user?.loyaltyPoints ?? 0} ${localizations.loyalty_points}',
+                                '${user?.loyaltyPoints ?? 0} ${localizations.loyaltyPoints}',
                                 style: TextStyle(
                                   color: Theme.of(context).primaryColor,
                                   fontWeight: FontWeight.bold,
@@ -228,7 +228,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                             );
                           },
-                          child: Text(localizations.edit_profile),
+                          child: Text(localizations.editProfile),
                         ),
                       ],
                     ),
@@ -278,7 +278,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         // Тёмная тема
                         ListTile(
                           leading: const Icon(Icons.dark_mode),
-                          title: Text(localizations.dark_mode),
+                          title: Text(localizations.darkMode),
                           trailing: Switch(
                             value: Theme.of(context).brightness == Brightness.dark,
                             onChanged: (value) {

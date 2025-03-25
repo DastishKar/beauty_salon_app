@@ -55,7 +55,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     
     return Scaffold(
       appBar: AppBar(
-        title: Text(localizations.app_name),
+        title: Text(localizations.appName),
         automaticallyImplyLeading: false, // Убираем кнопку "назад"
       ),
       body: _isLoading
@@ -88,13 +88,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
             
             // Ближайшие записи
             if (_upcomingAppointments.isNotEmpty) ...[
-              _sectionHeader(localizations.my_appointments),
+              _sectionHeader(localizations.myAppointments),
               _buildAppointmentList(),
               const SizedBox(height: 24),
             ],
             
             // Популярные услуги
-            _sectionHeader(localizations.popular_services),
+            _sectionHeader(localizations.popularServices),
             _buildServicesPlaceholder(),
             const SizedBox(height: 24),
             
