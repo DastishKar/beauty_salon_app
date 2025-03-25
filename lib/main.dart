@@ -1,8 +1,40 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'firebase_options.dart';
 
-void main() {
-  runApp(const MyApp());
+import 'services/auth_service.dart';
+import 'services/language_service.dart';
+import 'utils/app_theme.dart';
+import 'l10n/app_localizations.dart';
+import 'screens/splash_screen.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  
+  // Инициализация SharedPreferences для хранения настроек
+  final prefs = await SharedPreferences.getInstance();
+  
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AuthService>(
+          create: (_) => AuthService(),
+        ),
+        ChangeNotifierProvider<LanguageService>(
+          create: (_) => LanguageService(prefs),
+        ),
+      ],
+      child: const BeautySalonApp(),
+    ),
+  );
 }
+
+
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
