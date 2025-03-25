@@ -12,11 +12,11 @@ class ServiceCard extends StatelessWidget {
   final bool isSmall;
   
   const ServiceCard({
-    Key? key,
+    super.key,
     required this.service,
     this.onTap,
     this.isSmall = false,
-  }) : super(key: key);
+  });
   
   @override
   Widget build(BuildContext context) {
@@ -43,7 +43,7 @@ class ServiceCard extends StatelessWidget {
               height: 120,
               width: double.infinity,
               decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor.withOpacity(0.1),
+                color: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
                 image: service.photoURL != null
                     ? DecorationImage(
                         image: NetworkImage(service.photoURL!),
@@ -124,7 +124,7 @@ class ServiceCard extends StatelessWidget {
                 width: 60,
                 height: 60,
                 decoration: BoxDecoration(
-                  color: Theme.of(context).primaryColor.withOpacity(0.1),
+                  color: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
                   borderRadius: BorderRadius.circular(8),
                   image: service.photoURL != null
                       ? DecorationImage(

@@ -3,14 +3,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../l10n/app_localizations.dart';
+
 import '../services/language_service.dart';
 
 class PromotionsSlider extends StatefulWidget {
-  const PromotionsSlider({Key? key}) : super(key: key);
+  const PromotionsSlider({super.key});
 
   @override
-  _PromotionsSliderState createState() => _PromotionsSliderState();
+  State<PromotionsSlider> createState() => _PromotionsSliderState();
 }
 
 class _PromotionsSliderState extends State<PromotionsSlider> {
@@ -132,7 +132,7 @@ class _PromotionsSliderState extends State<PromotionsSlider> {
                       width: 60,
                       height: 60,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withAlpha((0.2*255).round()),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
@@ -189,7 +189,7 @@ class _PromotionsSliderState extends State<PromotionsSlider> {
                 shape: BoxShape.circle,
                 color: _currentPage == index
                     ? Theme.of(context).primaryColor
-                    : Colors.grey.withOpacity(0.5),
+                    : Colors.grey.withValues(red: 128, green: 128, blue: 128, alpha: 0.1)
               ),
             );
           }),

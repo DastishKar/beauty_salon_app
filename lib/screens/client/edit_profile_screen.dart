@@ -12,10 +12,10 @@ import '../../utils/validators.dart';
 import '../../widgets/loading_overlay.dart';
 
 class EditProfileScreen extends StatefulWidget {
-  const EditProfileScreen({Key? key}) : super(key: key);
+  const EditProfileScreen({super.key});
 
   @override
-  _EditProfileScreenState createState() => _EditProfileScreenState();
+  State<EditProfileScreen> createState() => _EditProfileScreenState();
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
@@ -154,7 +154,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     children: [
                       CircleAvatar(
                         radius: 60,
-                        backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                        backgroundColor: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
                         backgroundImage: _selectedImage != null
                             ? FileImage(_selectedImage!)
                             : (user.photoURL != null

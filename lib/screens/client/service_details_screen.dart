@@ -7,23 +7,22 @@ import '../../l10n/app_localizations.dart';
 import '../../models/service_model.dart';
 import '../../models/master_model.dart';
 import '../../services/language_service.dart';
-import '../../screens/client/booking_screen.dart';
 
 class ServiceDetailsScreen extends StatefulWidget {
   final ServiceModel service;
 
   const ServiceDetailsScreen({
-    Key? key,
+    super.key,
     required this.service,
-  }) : super(key: key);
+  });
 
   @override
-  _ServiceDetailsScreenState createState() => _ServiceDetailsScreenState();
+  State<ServiceDetailsScreen> createState() => _ServiceDetailsScreenState();
 }
 
 class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   bool _isLoading = false;
-  List<MasterModel> _availableMasters = [];
+  final List<MasterModel> _availableMasters = [];
   
   @override
   void initState() {
@@ -67,7 +66,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                     height: 200,
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: Theme.of(context).primaryColor.withOpacity(0.1),
+                      color: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
                       borderRadius: BorderRadius.circular(16),
                       image: widget.service.photoURL != null
                           ? DecorationImage(

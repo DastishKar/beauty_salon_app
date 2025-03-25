@@ -1,12 +1,11 @@
 // lib/widgets/appointment_card.dart
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/appointment_model.dart';
-import '../services/language_service.dart';
+
 
 class AppointmentCard extends StatelessWidget {
   final AppointmentModel appointment;
@@ -14,11 +13,11 @@ class AppointmentCard extends StatelessWidget {
   final VoidCallback? onCancel;
   
   const AppointmentCard({
-    Key? key,
+    super.key,
     required this.appointment,
     this.onTap,
     this.onCancel,
-  }) : super(key: key);
+  });
   
   @override
   Widget build(BuildContext context) {
@@ -78,7 +77,7 @@ class AppointmentCard extends StatelessWidget {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.1),
+                      color: statusColor.withAlpha((0.1*255).round()),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Text(

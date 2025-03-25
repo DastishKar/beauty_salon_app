@@ -26,8 +26,8 @@ class UserModel {
     Map<String, bool>? favorites,
     Map<String, bool>? notifications,
   }) : 
-    this.favorites = favorites ?? {},
-    this.notifications = notifications ?? {'push': true, 'email': true, 'sms': false};
+    favorites = favorites ?? {},
+    notifications = notifications ?? {'push': true, 'email': true, 'sms': false};
 
   factory UserModel.fromMap(String id, Map<String, dynamic> data) {
     return UserModel(
@@ -74,14 +74,14 @@ class UserModel {
     Map<String, bool>? notifications,
   }) {
     return UserModel(
-      id: this.id,
+      id: id,
       displayName: displayName ?? this.displayName,
       email: email ?? this.email,
       phoneNumber: phoneNumber ?? this.phoneNumber,
       photoURL: photoURL ?? this.photoURL,
       role: role ?? this.role,
       language: language ?? this.language,
-      createdAt: this.createdAt,
+      createdAt: createdAt,
       loyaltyPoints: loyaltyPoints ?? this.loyaltyPoints,
       favorites: favorites ?? Map<String, bool>.from(this.favorites),
       notifications: notifications ?? Map<String, bool>.from(this.notifications),

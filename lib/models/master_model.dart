@@ -26,8 +26,8 @@ class MasterModel {
     this.rating = 0.0,
     this.reviewsCount = 0,
   }) : 
-    this.portfolio = portfolio ?? [],
-    this.schedule = schedule ?? {};
+    portfolio = portfolio ?? [],
+    schedule = schedule ?? {};
 
   String getLocalizedDescription(String languageCode) {
     return description[languageCode] ?? description['ru'] ?? '';
@@ -117,7 +117,7 @@ class MasterModel {
     int? reviewsCount,
   }) {
     return MasterModel(
-      id: this.id,
+      id: id,
       userId: userId ?? this.userId,
       displayName: displayName ?? this.displayName,
       specializations: specializations ?? List<String>.from(this.specializations),
@@ -141,7 +141,7 @@ class DaySchedule {
     required this.start,
     required this.end,
     List<TimeBreak>? breaks,
-  }) : this.breaks = breaks ?? [];
+  }) : breaks = breaks ?? [];
 }
 
 class TimeBreak {

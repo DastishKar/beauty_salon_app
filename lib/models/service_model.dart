@@ -69,7 +69,7 @@ class ServiceModel {
     bool? isActive,
   }) {
     return ServiceModel(
-      id: this.id,
+      id: id,
       name: name ?? Map<String, String>.from(this.name),
       description: description ?? Map<String, String>.from(this.description),
       category: category ?? this.category,

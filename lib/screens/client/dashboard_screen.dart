@@ -1,31 +1,24 @@
 // lib/screens/client/dashboard_screen.dart
 
+import 'package:beauty_salon_app/widgets/promotions_slider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../services/auth_service.dart';
-import '../../models/service_model.dart';
-import '../../models/master_model.dart';
 import '../../models/appointment_model.dart';
-import '../../widgets/service_card.dart';
-import '../../widgets/master_card.dart';
-import '../../widgets/appointment_card.dart';
-import '../../widgets/promotions_slider.dart';
-import '../../l10n/app_localizations.dart';
+
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({Key? key}) : super(key: key);
+  const DashboardScreen({super.key});
 
   @override
-  _DashboardScreenState createState() => _DashboardScreenState();
+  State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
   bool _isLoading = true;
-  List<ServiceModel> _popularServices = [];
-  List<MasterModel> _topMasters = [];
-  List<AppointmentModel> _upcomingAppointments = [];
+  final List<AppointmentModel> _upcomingAppointments = [];
 
   @override
   void initState() {
@@ -272,7 +265,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       width: 50,
                       height: 50,
                       decoration: BoxDecoration(
-                        color: Theme.of(context).primaryColor.withOpacity(0.1),
+                        color: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Icon(

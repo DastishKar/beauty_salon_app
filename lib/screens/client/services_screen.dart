@@ -2,7 +2,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../services/language_service.dart';
@@ -12,10 +11,10 @@ import '../../widgets/service_card.dart';
 import 'service_details_screen.dart';
 
 class ServicesScreen extends StatefulWidget {
-  const ServicesScreen({Key? key}) : super(key: key);
+  const ServicesScreen({super.key});
 
   @override
-  _ServicesScreenState createState() => _ServicesScreenState();
+  State<ServicesScreen> createState() => _ServicesScreenState();
 }
 
 class _ServicesScreenState extends State<ServicesScreen> with SingleTickerProviderStateMixin {

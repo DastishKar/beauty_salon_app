@@ -6,9 +6,7 @@ import 'firebase_options.dart';
 
 import 'services/auth_service.dart';
 import 'services/language_service.dart';
-import 'utils/app_theme.dart';
-import 'l10n/app_localizations.dart';
-import 'screens/splash_screen.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

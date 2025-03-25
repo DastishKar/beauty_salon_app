@@ -11,10 +11,10 @@ import '../../widgets/loading_overlay.dart';
 import '../client/home_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({Key? key}) : super(key: key);
+  const RegisterScreen({super.key});
 
   @override
-  _RegisterScreenState createState() => _RegisterScreenState();
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
@@ -74,8 +74,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
     
     try {
+      // Получаем все сервисы ДО выполнения асинхронных операций
       final authService = Provider.of<AuthService>(context, listen: false);
-      
+      final languageService = Provider.of<LanguageService>(context, listen: false);
+  
       // Выполнение регистрации
       await authService.registerWithEmailAndPassword(
         _nameController.text.trim(),
@@ -84,11 +86,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _phoneController.text.trim(),
         _selectedLanguage,
       );
-      
+  
       // Обновление языка приложения
-      final languageService = Provider.of<LanguageService>(context, listen: false);
       await languageService.setLanguage(_selectedLanguage);
-      
+  
       // Переход на главный экран
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -117,7 +118,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
-    final languageService = Provider.of<LanguageService>(context);
+    // Слушаем изменения языка для обновления UI
+    Provider.of<LanguageService>(context);
     
     return LoadingOverlay(
       isLoading: _isLoading,

@@ -13,16 +13,16 @@ class MasterCard extends StatelessWidget {
   final bool isSmall;
   
   const MasterCard({
-    Key? key,
+    super.key,
     required this.master,
     this.onTap,
     this.isSmall = false,
-  }) : super(key: key);
+  });
   
   @override
   Widget build(BuildContext context) {
     final languageCode = Provider.of<LanguageService>(context).languageCode;
-    final localizations = AppLocalizations.of(context);
+    AppLocalizations.of(context);
     
     if (isSmall) {
       return _buildSmallCard(context, languageCode);
@@ -43,7 +43,7 @@ class MasterCard extends StatelessWidget {
               // Фото мастера
               CircleAvatar(
                 radius: 50,
-                backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                backgroundColor: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
                 backgroundImage: master.photoURL != null
                     ? NetworkImage(master.photoURL!)
                     : null,
@@ -118,7 +118,7 @@ class MasterCard extends StatelessWidget {
               // Фото мастера
               CircleAvatar(
                 radius: 30,
-                backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                backgroundColor: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
                 backgroundImage: master.photoURL != null
                     ? NetworkImage(master.photoURL!)
                     : null,

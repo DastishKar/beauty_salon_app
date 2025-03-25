@@ -105,7 +105,7 @@ class AppointmentModel {
     bool? reminder1day,
   }) {
     return AppointmentModel(
-      id: this.id,
+      id: id,
       clientId: clientId ?? this.clientId,
       masterId: masterId ?? this.masterId,
       masterName: masterName ?? this.masterName,
@@ -117,7 +117,7 @@ class AppointmentModel {
       price: price ?? this.price,
       status: status ?? this.status,
       notes: notes ?? this.notes,
-      createdAt: this.createdAt,
+      createdAt: createdAt,
       updatedAt: DateTime.now(),
       reminder15min: reminder15min ?? this.reminder15min,
       reminder1hour: reminder1hour ?? this.reminder1hour,

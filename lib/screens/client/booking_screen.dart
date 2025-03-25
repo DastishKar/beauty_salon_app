@@ -2,7 +2,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -11,20 +10,20 @@ import '../../models/master_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/language_service.dart';
 import '../../widgets/loading_overlay.dart';
-import '../../widgets/master_card.dart';
+
 
 class BookingScreen extends StatefulWidget {
   final ServiceModel service;
   final MasterModel? selectedMaster;
 
   const BookingScreen({
-    Key? key,
+    super.key,
     required this.service,
     this.selectedMaster,
-  }) : super(key: key);
+  });
 
   @override
-  _BookingScreenState createState() => _BookingScreenState();
+  State<BookingScreen> createState() => _BookingScreenState();
 }
 
 class _BookingScreenState extends State<BookingScreen> {
@@ -35,7 +34,7 @@ class _BookingScreenState extends State<BookingScreen> {
   DateTime _selectedDay = DateTime.now();
   MasterModel? _selectedMaster;
   String? _selectedTime;
-  List<MasterModel> _availableMasters = [];
+  final List<MasterModel> _availableMasters = [];
   List<String> _availableTimes = [];
 
   @override
@@ -132,8 +131,7 @@ class _BookingScreenState extends State<BookingScreen> {
         startMinute,
       );
       
-      final endDateTime = startDateTime.add(Duration(minutes: widget.service.duration));
-      final endTime = '${endDateTime.hour.toString().padLeft(2, '0')}:${endDateTime.minute.toString().padLeft(2, '0')}';
+      startDateTime.add(Duration(minutes: widget.service.duration));
       
       // TODO: Создание записи в Firestore
       await Future.delayed(const Duration(seconds: 2));
@@ -201,7 +199,7 @@ class _BookingScreenState extends State<BookingScreen> {
                               width: 60,
                               height: 60,
                               decoration: BoxDecoration(
-                                color: Theme.of(context).primaryColor.withOpacity(0.1),
+                                color: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Icon(
@@ -296,7 +294,7 @@ class _BookingScreenState extends State<BookingScreen> {
                         shape: BoxShape.circle,
                       ),
                       todayDecoration: BoxDecoration(
-                        color: Theme.of(context).primaryColor.withOpacity(0.3),
+                        color: Theme.of(context).primaryColor.withAlpha((0.3*255).round()),
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -356,7 +354,7 @@ class _BookingScreenState extends State<BookingScreen> {
                                 children: [
                                   CircleAvatar(
                                     radius: 30,
-                                    backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                                    backgroundColor: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
                                     backgroundImage: master.photoURL != null
                                         ? NetworkImage(master.photoURL!)
                                         : null,

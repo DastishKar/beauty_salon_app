@@ -11,10 +11,10 @@ import '../auth/login_screen.dart';
 import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({Key? key}) : super(key: key);
+  const ProfileScreen({super.key});
 
   @override
-  _ProfileScreenState createState() => _ProfileScreenState();
+  State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
@@ -160,7 +160,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         // Аватар
                         CircleAvatar(
                           radius: 50,
-                          backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                          backgroundColor: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
                           backgroundImage: user?.photoURL != null
                               ? NetworkImage(user!.photoURL!)
                               : null,
@@ -195,7 +195,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).primaryColor.withOpacity(0.1),
+                            color: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Row(

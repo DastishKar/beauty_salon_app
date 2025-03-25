@@ -9,10 +9,10 @@ import 'auth/login_screen.dart';
 import 'client/home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({Key? key}) : super(key: key);
+  const SplashScreen({super.key});
 
   @override
-  _SplashScreenState createState() => _SplashScreenState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
 class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
@@ -83,7 +83,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             end: Alignment.bottomCenter,
             colors: [
               Theme.of(context).primaryColor,
-              Theme.of(context).primaryColor.withOpacity(0.7),
+              Theme.of(context).primaryColor.withAlpha((0.7*255).round()),
             ],
           ),
         ),

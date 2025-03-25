@@ -13,14 +13,14 @@ class LoadingOverlay extends StatelessWidget {
   final double opacity;
 
   const LoadingOverlay({
-    Key? key,
+    super.key,
     required this.child,
     required this.isLoading,
     this.loadingText,
     this.backgroundColor,
     this.textColor,
     this.opacity = 0.7,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +33,7 @@ class LoadingOverlay extends StatelessWidget {
         if (isLoading)
           Positioned.fill(
             child: Container(
-              color: (backgroundColor ?? Colors.black).withOpacity(opacity),
+              color: (backgroundColor ?? Colors.black).withAlpha((opacity*255).round()),
               child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

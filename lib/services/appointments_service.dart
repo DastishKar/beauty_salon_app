@@ -4,8 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/appointment_model.dart';
-import '../models/service_model.dart';
-import '../models/master_model.dart';
+
 import 'services_service.dart';
 import 'masters_service.dart';
 
