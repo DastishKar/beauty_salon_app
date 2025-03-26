@@ -113,7 +113,8 @@ class AppTheme {
   ),
 
   // Темная тема
-  static; final ThemeData darkTheme = ThemeData(
+  static;
+  static final ThemeData darkTheme = ThemeData(
     primaryColor: primaryColor,
     primarySwatch: Colors.purple,
     colorScheme: ColorScheme.dark(
