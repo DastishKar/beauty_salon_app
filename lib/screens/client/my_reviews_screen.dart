@@ -144,9 +144,21 @@ class _MyReviewsScreenState extends State<MyReviewsScreen> {
         ),
         body: _reviews.isEmpty
             ? Center(
-                child: Text(
-                  localizations.translate('no_reviews_yet'),
-                  style: Theme.of(context).textTheme.titleMedium,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.rate_review_outlined,
+                      size: 80,
+                      color: Colors.grey[400],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      localizations.translate('no_reviews_yet'),
+                      style: Theme.of(context).textTheme.titleMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
               )
             : RefreshIndicator(
@@ -158,6 +170,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen> {
                     final review = _reviews[index];
                     return ReviewCard(
                       review: review,
+                      showMasterInfo: true, // Показываем информацию о мастере
                       onDelete: () => _deleteReview(review),
                     );
                   },

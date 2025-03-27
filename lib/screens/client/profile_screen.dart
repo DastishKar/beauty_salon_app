@@ -8,6 +8,7 @@ import '../../services/auth_service.dart';
 import '../../services/language_service.dart';
 import '../../widgets/loading_overlay.dart';
 import '../auth/login_screen.dart';
+import 'my_reviews_screen.dart'; // Импортируем экран моих отзывов
 import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -229,6 +230,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             );
                           },
                           child: Text(localizations.editProfile),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                
+                // Секция управления аккаунтом
+                Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          localizations.translate('account_management'),
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Мои отзывы - добавляем новую опцию
+                        ListTile(
+                          leading: const Icon(Icons.rate_review),
+                          title: Text(localizations.translate('my_reviews')),
+                          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => const MyReviewsScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        const Divider(),
+                        
+                        // Моя программа лояльности
+                        ListTile(
+                          leading: const Icon(Icons.card_giftcard),
+                          title: Text(localizations.translate('loyalty_program')),
+                          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                          onTap: () {
+                            // TODO: Переход на экран программы лояльности
+                          },
                         ),
                       ],
                     ),

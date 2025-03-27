@@ -165,26 +165,35 @@ class AppLocalizations {
       'saturday': 'Суббота',
       'sunday': 'Воскресенье',
 
-      
-
       // Дополнительные строки
       'no_services_available': 'Нет доступных услуг',
-
+      'my_reviews': 'Мои отзывы',
+      'no_reviews_yet': 'У вас пока нет отзывов',
+      'account_management': 'Управление аккаунтом',
     },
     
-    // Вставьте здесь такие же строки для казахского и английского языков...
+    // Для казахского языка
     'kk': {
       // Общие
       'app_name': 'Астана сұлулық салоны',
       'ok': 'OK',
-      // ... и так далее
+      // ... добавьте здесь все необходимые переводы на казахский
+      'my_reviews': 'Менің пікірлерім',
+      'no_reviews_yet': 'Сізде әлі пікірлер жоқ',
+      'account_management': 'Тіркелгіні басқару',
+      'loyalty_program': 'Адалдық бағдарламасы',
     },
     
+    // Для английского языка
     'en': {
       // Общие
       'app_name': 'Astana Beauty Salon',
       'ok': 'OK',
-      // ... и так далее
+      // ... добавьте здесь все необходимые переводы на английский
+      'my_reviews': 'My Reviews',
+      'no_reviews_yet': 'You don\'t have any reviews yet',
+      'account_management': 'Account Management',
+      'loyalty_program': 'Loyalty Program',
     },
   };
 
@@ -280,6 +289,12 @@ class AppLocalizations {
   String get loyaltyPoints => translate('loyalty_points');
   String get settings => translate('settings');
   String get profileUpdated => translate('profile_updated');
+  
+  // Отзывы
+  String get myReviews => translate('my_reviews');
+  String get noReviewsYet => translate('no_reviews_yet');
+  String get accountManagement => translate('account_management');
+  String get loyaltyProgram => translate('loyalty_program');
 }
 
 // Делегат для локализации
