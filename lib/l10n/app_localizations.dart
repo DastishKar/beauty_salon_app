@@ -142,6 +142,19 @@ class AppLocalizations {
       'upload_photo': 'Загрузить фото',
       'thank_for_review': 'Спасибо за ваш отзыв!',
       'no_reviews': 'Пока нет отзывов',
+      'delete_review': 'Удалить отзыв',
+      'delete_review_confirmation': 'Вы уверены, что хотите удалить отзыв?',
+      'review_deleted': 'Отзыв удален',
+      'view_all_reviews': 'Смотреть все отзывы',
+      'send_review': 'Отправить отзыв',
+      'review_hint': 'Напишите ваше мнение о работе мастера...',
+      'review_required': 'Пожалуйста, напишите отзыв',
+      'add_photo': 'Добавить фото',
+      'max_photos_reached': 'Достигнут лимит фото',
+      'max_photos_warning': 'Можно загрузить максимум 5 фотографий',
+      'photo_limit': 'Фотографий',
+      'not_authenticated': 'Вы не авторизованы',
+      'select_appointment': 'Выберите запись',
 
       // Дни недели
       'monday': 'Понедельник',
@@ -151,6 +164,8 @@ class AppLocalizations {
       'friday': 'Пятница',
       'saturday': 'Суббота',
       'sunday': 'Воскресенье',
+
+      
 
       // Дополнительные строки
       'no_services_available': 'Нет доступных услуг',

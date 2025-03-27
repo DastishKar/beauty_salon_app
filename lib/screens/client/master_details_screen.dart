@@ -7,10 +7,12 @@ import '../../l10n/app_localizations.dart';
 import '../../models/master_model.dart';
 import '../../models/service_model.dart';
 import '../../services/language_service.dart';
+import '../../services/masters_service.dart';
 import '../../services/services_service.dart';
-import '../../widgets/loading_overlay.dart';
 import '../../widgets/service_card.dart';
 import 'booking_screen.dart';
+import 'reviews_screen.dart';
+import 'create_review_screen.dart';
 
 class MasterDetailsScreen extends StatefulWidget {
   final MasterModel master;
@@ -28,47 +30,51 @@ class _MasterDetailsScreenState extends State<MasterDetailsScreen> with SingleTi
   late TabController _tabController;
   bool _isLoading = false;
   List<ServiceModel> _services = [];
-
+  
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _loadServices();
   }
-
+  
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
   }
-
+  
   // Загрузка услуг, которые выполняет мастер
   Future<void> _loadServices() async {
     setState(() {
       _isLoading = true;
     });
-
+  
     try {
       final servicesService = ServicesService();
-      _services = await servicesService.getServicesByMaster(widget.master.id);
+      final services = await servicesService.getServicesByMaster(widget.master.id);
       
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (!mounted) return;
+      
+      setState(() {
+        _services = services;
+        _isLoading = false;
+      });
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка при загрузке услуг: $e'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (!mounted) return;
+      
+      debugPrint('Error loading services: $e');
+      
+      setState(() {
+        _isLoading = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error loading services: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
     }
   }
 
@@ -77,93 +83,100 @@ class _MasterDetailsScreenState extends State<MasterDetailsScreen> with SingleTi
     final localizations = AppLocalizations.of(context);
     final languageCode = Provider.of<LanguageService>(context).languageCode;
     
-    return LoadingOverlay(
-      isLoading: _isLoading,
-      child: Scaffold(
-        body: CustomScrollView(
-          slivers: [
-            // Верхняя часть с фото и именем мастера
-            SliverAppBar(
-              expandedHeight: 300,
-              pinned: true,
-              flexibleSpace: FlexibleSpaceBar(
-                title: Text(widget.master.displayName),
-                background: widget.master.photoURL != null
-                    ? Image.network(
-                        widget.master.photoURL!,
-                        fit: BoxFit.cover,
-                      )
-                    : Container(
-                        color: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
-                        child: const Center(
-                          child: Icon(
-                            Icons.person,
-                            size: 100,
-                            color: Colors.grey,
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.master.displayName),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : CustomScrollView(
+              slivers: [
+                // Верхняя часть с фото и именем мастера
+                SliverAppBar(
+                  expandedHeight: 300,
+                  pinned: true,
+                  automaticallyImplyLeading: false,
+                  flexibleSpace: FlexibleSpaceBar(
+                    title: Text(widget.master.displayName),
+                    background: widget.master.photoURL != null
+                        ? Image.network(
+                            widget.master.photoURL!,
+                            fit: BoxFit.cover,
+                          )
+                        : Container(
+                            color: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
+                            child: const Center(
+                              child: Icon(
+                                Icons.person,
+                                size: 100,
+                                color: Colors.grey,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-              ),
-            ),
-            
-            // Табы для навигации по секциям информации
-            SliverPersistentHeader(
-              delegate: _SliverAppBarDelegate(
-                TabBar(
-                  controller: _tabController,
-                  tabs: [
-                    Tab(text: localizations.translate('about')),
-                    Tab(text: localizations.translate('portfolio')),
-                    Tab(text: localizations.translate('schedule')),
-                  ],
+                  ),
                 ),
-              ),
-              pinned: true,
-            ),
-            
-            // Контент табов
-            SliverFillRemaining(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  // Вкладка О мастере
-                  _buildAboutTab(context, localizations, languageCode),
-                  
-                  // Вкладка Портфолио
-                  _buildPortfolioTab(context),
-                  
-                  // Вкладка Расписание
-                  _buildScheduleTab(context, localizations),
-                ],
-              ),
-            ),
-          ],
-        ),
-        
-        // Кнопка для записи к мастеру
-        bottomNavigationBar: Container(
-          padding: const EdgeInsets.all(16),
-          child: ElevatedButton(
-            onPressed: () {
-              if (_services.isNotEmpty) {
-                Navigator.of(context).push(
-                 MaterialPageRoute(
-                   builder: (context) => BookingScreen(
-                     service: _services[0], // Передаем первую услугу из списка
-                     selectedMaster: widget.master,
+                
+                // Табы для навигации по секциям информации
+                SliverPersistentHeader(
+                  delegate: _SliverAppBarDelegate(
+                    TabBar(
+                      controller: _tabController,
+                      tabs: [
+                        Tab(text: localizations.translate('about')),
+                        Tab(text: localizations.translate('portfolio')),
+                        Tab(text: localizations.translate('schedule')),
+                        Tab(text: localizations.translate('reviews')),
+                      ],
                     ),
                   ),
-                );
-              } else {
-               ScaffoldMessenger.of(context).showSnackBar(
-                 SnackBar(
-                   content: Text(localizations.translate('no_services_available')),
-                 ),
-               );
-              }
-            },
-            child: Text(localizations.translate('book_with_master')),
-          ),
+                  pinned: true,
+                ),
+                
+                // Контент табов
+                SliverFillRemaining(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      // Вкладка О мастере
+                      _buildAboutTab(context, localizations, languageCode),
+                      
+                      // Вкладка Портфолио
+                      _buildPortfolioTab(context),
+                      
+                      // Вкладка Расписание
+                      _buildScheduleTab(context, localizations),
+                      
+                      // Вкладка Отзывы
+                      _buildReviewsTab(context, localizations),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+      
+      // Кнопка для записи к мастеру
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.all(16),
+        child: ElevatedButton(
+          onPressed: () {
+            if (_services.isNotEmpty) {
+              Navigator.of(context).push(
+               MaterialPageRoute(
+                 builder: (context) => BookingScreen(
+                   service: _services[0], // Передаем первую услугу из списка
+                   selectedMaster: widget.master,
+                  ),
+                ),
+              );
+            } else {
+             ScaffoldMessenger.of(context).showSnackBar(
+               SnackBar(
+                 content: Text(localizations.translate('no_services_available')),
+               ),
+             );
+            }
+          },
+          child: Text(localizations.translate('book_with_master')),
         ),
       ),
     );
@@ -355,6 +368,89 @@ class _MasterDetailsScreenState extends State<MasterDetailsScreen> with SingleTi
           ),
         );
       },
+    );
+  }
+  
+  // Содержимое вкладки Отзывы
+  Widget _buildReviewsTab(BuildContext context, AppLocalizations localizations) {
+    return Column(
+      children: [
+        // Виджет рейтинга
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              // Звезды
+              Row(
+                children: List.generate(5, (index) {
+                  return Icon(
+                    index < widget.master.rating.floor()
+                        ? Icons.star
+                        : (index < widget.master.rating 
+                            ? Icons.star_half
+                            : Icons.star_border),
+                    color: Colors.amber,
+                    size: 28,
+                  );
+                }),
+              ),
+              const SizedBox(width: 12),
+              
+              // Числовой рейтинг
+              Text(
+                widget.master.rating.toStringAsFixed(1),
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(width: 8),
+              
+              // Количество отзывов
+              Text(
+                '(${widget.master.reviewsCount} ${localizations.translate('reviews')})',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
+          ),
+        ),
+        
+        // Кнопка "Смотреть все отзывы"
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: OutlinedButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => ReviewsScreen(master: widget.master),
+                ),
+              );
+            },
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 48),
+            ),
+            child: Text(localizations.translate('view_all_reviews')),
+          ),
+        ),
+        
+        // Кнопка "Оставить отзыв"
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => CreateReviewScreen(master: widget.master),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 48),
+            ),
+            child: Text(localizations.translate('leave_review')),
+          ),
+        ),
+      ],
     );
   }
   
