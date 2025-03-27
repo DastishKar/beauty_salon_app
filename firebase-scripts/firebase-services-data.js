@@ -1,6 +1,6 @@
 // Инициализация Firebase
 const admin = require('firebase-admin');
-const serviceAccount = require('./beauty-salon-app-6f1d1-firebase-adminsdk-fbsvc-6f2d205f00.json'); // Файл с ключами сервисного аккаунта
+const serviceAccount = require('./beauty-salon-app-6f1d1-firebase-adminsdk-fbsvc-00c32b0798.json'); // Файл с ключами сервисного аккаунта
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
