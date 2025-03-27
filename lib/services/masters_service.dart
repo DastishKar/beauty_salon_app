@@ -63,16 +63,52 @@ class MastersService {
         return [];
       }
       
-      // Получаем всех мастеров
-      final List<MasterModel> allMasters = await getAllMasters();
+      // Получаем только тех мастеров, которые могут выполнять данную услугу
+      final List<MasterModel> masters = [];
       
-      // Фильтруем мастеров, которые могут выполнять указанную услугу
-      return allMasters.where((master) => 
-        availableMasters.containsKey(master.id) && availableMasters[master.id] == true
-      ).toList();
+      // Используем батч-запросы для эффективного получения мастеров
+      final batch = <Future<DocumentSnapshot>>[];
+      
+      availableMasters.forEach((masterId, isAvailable) {
+        if (isAvailable) {
+          batch.add(_firestore.collection('masters').doc(masterId).get());
+        }
+      });
+      
+      final results = await Future.wait(batch);
+      
+      for (var doc in results) {
+        if (doc.exists) {
+          masters.add(MasterModel.fromMap(doc.id, doc.data() as Map<String, dynamic>));
+        }
+      }
+      
+      return masters;
     } catch (e) {
       if (kDebugMode) {
         print('Ошибка при получении мастеров по услуге: $e');
+      }
+      return [];
+    }
+  }
+  
+  // Получение мастеров по специализации
+  Future<List<MasterModel>> getMastersBySpecialization(String specialization) async {
+    try {
+      final QuerySnapshot snapshot = await _firestore
+          .collection('masters')
+          .get();
+      
+      final List<MasterModel> masters = snapshot.docs.map((doc) {
+        return MasterModel.fromMap(doc.id, doc.data() as Map<String, dynamic>);
+      }).toList();
+      
+      return masters.where((master) => 
+        master.specializations.contains(specialization)
+      ).toList();
+    } catch (e) {
+      if (kDebugMode) {
+        print('Ошибка при получении мастеров по специализации: $e');
       }
       return [];
     }

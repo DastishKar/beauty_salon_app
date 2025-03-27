@@ -74,6 +74,16 @@ class AppLocalizations {
       'specializations': 'Специализации',
       'portfolio': 'Портфолио',
       'reviews': 'Отзывы',
+      'no_masters_found': 'Мастера не найдены',
+      'about_master': 'О мастере',
+      'book_with_master': 'Записаться к мастеру',
+      'no_portfolio_items': 'Нет элементов портфолио',
+      'about': 'О мастере',
+      'schedule': 'Расписание',
+      'day_off': 'Выходной',
+      'breaks': 'Перерывы',
+      'search_masters': 'Поиск мастеров',
+      'all': 'Все',
       
       // Записи
       'my_appointments': 'Мои записи',
@@ -132,6 +142,19 @@ class AppLocalizations {
       'upload_photo': 'Загрузить фото',
       'thank_for_review': 'Спасибо за ваш отзыв!',
       'no_reviews': 'Пока нет отзывов',
+
+      // Дни недели
+      'monday': 'Понедельник',
+      'tuesday': 'Вторник',
+      'wednesday': 'Среда',
+      'thursday': 'Четверг',
+      'friday': 'Пятница',
+      'saturday': 'Суббота',
+      'sunday': 'Воскресенье',
+
+      // Дополнительные строки
+      'no_services_available': 'Нет доступных услуг',
+
     },
     
     // Вставьте здесь такие же строки для казахского и английского языков...
@@ -207,6 +230,11 @@ class AppLocalizations {
   // Мастера
   String get masters => translate('masters');
   String get allMasters => translate('all_masters');
+  String get aboutMaster => translate('about_master');
+  String get noMastersFound => translate('no_masters_found');
+  String get about => translate('about');
+  String get portfolio => translate('portfolio');
+  String get schedule => translate('schedule');
   
   // Записи
   String get myAppointments => translate('my_appointments');

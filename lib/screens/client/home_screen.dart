@@ -9,6 +9,7 @@ import 'dashboard_screen.dart';
 import 'services_screen.dart';
 import 'appointments_screen.dart';
 import 'profile_screen.dart';
+import 'masters_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -65,6 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: const [
           DashboardScreen(),
           ServicesScreen(),
+          MastersScreen(),
           AppointmentsScreen(),
           ProfileScreen(),
         ],
@@ -72,6 +74,7 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: _onTabTapped,
+        type: BottomNavigationBarType.fixed,
         items: [
           BottomNavigationBarItem(
             icon: const Icon(Icons.home),
@@ -80,6 +83,10 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(
             icon: const Icon(Icons.spa),
             label: localizations.services,
+          ),
+          BottomNavigationBarItem(
+          icon: const Icon(Icons.people), // Иконка для мастеров
+          label: localizations.masters, // Используем геттер
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.calendar_today),

@@ -107,6 +107,35 @@ class ServicesService {
     }
   }
   
+  // Получение услуг, выполняемых мастером
+  Future<List<ServiceModel>> getServicesByMaster(String masterId) async {
+    try {
+      final QuerySnapshot snapshot = await _firestore
+          .collection('services')
+          .where('isActive', isEqualTo: true)
+          .get();
+      
+      final List<ServiceModel> services = [];
+      
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final availableMasters = Map<String, bool>.from(data['availableMasters'] ?? {});
+        
+        // Проверяем, может ли этот мастер выполнять услугу
+        if (availableMasters.containsKey(masterId) && availableMasters[masterId] == true) {
+          services.add(ServiceModel.fromMap(doc.id, data));
+        }
+      }
+      
+      return services;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Ошибка при получении услуг мастера: $e');
+      }
+      return [];
+    }
+  }
+  
   // Поиск услуг по названию
   Future<List<ServiceModel>> searchServices(String query) async {
     try {
