@@ -1,6 +1,6 @@
 // Сохраните этот код как check-database.js в директории firebase-scripts
 const admin = require('firebase-admin');
-const serviceAccount = require('./beauty-salon-app-6f1d1-firebase-adminsdk-fbsvc-6f2d205f00.json');
+const serviceAccount = require('./beauty-salon-app-6f1d1-firebase-adminsdk-fbsvc-00c32b0798.json');
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)

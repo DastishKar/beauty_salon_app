@@ -1,6 +1,7 @@
 // lib/screens/client/service_details_screen.dart
 
 import 'package:beauty_salon_app/screens/client/master_details_screen.dart';
+import 'package:beauty_salon_app/screens/client/booking_screen.dart';
 import 'package:beauty_salon_app/services/masters_service.dart';
 import 'package:beauty_salon_app/widgets/master_card.dart';
 import 'package:flutter/material.dart';
@@ -37,27 +38,45 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   // Загрузка мастеров, которые выполняют данную услугу
   Future<void> _loadMasters() async {
     setState(() {
-    _isLoading = true;
-  });
+      _isLoading = true;
+    });
   
-  try {
-    final mastersService = MastersService();
-    final masters = await mastersService.getMastersByService(widget.service.id);
-    
-    if (mounted) {
-      setState(() {
-        _availableMasters = masters;
-        _isLoading = false;
-      });
+    try {
+      final mastersService = MastersService();
+      
+      // Debug information
+      debugPrint('Loading masters for service ID: ${widget.service.id}');
+      debugPrint('Service category: ${widget.service.category}');
+      debugPrint('Service available masters: ${widget.service.availableMasters}');
+      
+      final masters = await mastersService.getMastersByService(widget.service.id);
+      
+      // Debug the results
+      debugPrint('Found ${masters.length} masters for this service');
+      if (masters.isNotEmpty) {
+        debugPrint('First master name: ${masters.first.displayName}');
+      }
+      
+      if (mounted) {
+        setState(() {
+          _availableMasters = masters;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading masters: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading masters: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
-  } catch (e) {
-    debugPrint('Ошибка при загрузке мастеров: $e');
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
   }
 
   @override
@@ -77,33 +96,32 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Изображение услуги
-                  // Изображение услуги
-                 Container(
-                   height: 200,
-                   width: double.infinity,
-                   decoration: BoxDecoration(
-                     color: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
-                     borderRadius: BorderRadius.circular(16),
-                     image: widget.service.photoURL != null
-                      ? DecorationImage(
-                         image: NetworkImage(widget.service.photoURL!),
-                         fit: BoxFit.cover,
-                         onError: (exception, stackTrace) {
-                           // Просто обрабатываем ошибку - не возвращаем виджет!
-                           debugPrint('Ошибка загрузки изображения: $exception');
-                         },
-                       )
-                     : null,
-                   ),
-                   alignment: Alignment.center,
-                   child: (widget.service.photoURL == null) || _imageHasError
-                    ? Icon(
-                       Icons.spa,
-                       size: 80,
-                       color: Theme.of(context).primaryColor,
-                      )
-                   : null,
-                 ),
+                  Container(
+                    height: 200,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
+                      borderRadius: BorderRadius.circular(16),
+                      image: widget.service.photoURL != null
+                        ? DecorationImage(
+                            image: NetworkImage(widget.service.photoURL!),
+                            fit: BoxFit.cover,
+                            onError: (exception, stackTrace) {
+                              // Просто обрабатываем ошибку - не возвращаем виджет!
+                              debugPrint('Error loading image: $exception');
+                            },
+                          )
+                        : null,
+                    ),
+                    alignment: Alignment.center,
+                    child: (widget.service.photoURL == null) || _imageHasError
+                      ? Icon(
+                          Icons.spa,
+                          size: 80,
+                          color: Theme.of(context).primaryColor,
+                        )
+                      : null,
+                  ),
                   const SizedBox(height: 20),
                   
                   // Название и информация
@@ -168,16 +186,29 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                   const SizedBox(height: 12),
                   if (_availableMasters.isEmpty)
                     Center(
-                      child: Text(
-                        localizations.translate('no_available_masters'),
-                        style: Theme.of(context).textTheme.bodyMedium,
+                      child: Column(
+                        children: [
+                          Text(
+                            localizations.translate('no_available_masters'),
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          // Show debug info for no masters only in debug mode
+                          if (Theme.of(context).platform == TargetPlatform.android) 
+                          Text(
+                            'Service ID: ${widget.service.id}, Category: ${widget.service.category}',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   
                    //Список карточек мастеров будет здесь
                   if (_availableMasters.isNotEmpty)
                    SizedBox(
-                     height: 150,
+                     height: 200, // Increased height for better visibility
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
                         itemCount: _availableMasters.length,
@@ -185,18 +216,21 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                           final master = _availableMasters[index];
                            return Padding(
                              padding: const EdgeInsets.only(right: 12.0),
-                             child: MasterCard(
-                               master: master,
-                               isSmall: true,
-                               onTap: () {
-                                 Navigator.of(context).push(
-                                   MaterialPageRoute(
-                                     builder: (context) => MasterDetailsScreen(
-                                       master: master,
+                             child: SizedBox(
+                               width: 150, // Set fixed width for better layout
+                               child: MasterCard(
+                                 master: master,
+                                 isSmall: true,
+                                 onTap: () {
+                                   Navigator.of(context).push(
+                                     MaterialPageRoute(
+                                       builder: (context) => MasterDetailsScreen(
+                                         master: master,
+                                        ),
                                       ),
-                                    ),
-                                  );
-                                },
+                                    );
+                                  },
+                                ),
                               ),
                             );
                         },
@@ -208,14 +242,19 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.all(16.0),
         child: ElevatedButton(
-          onPressed: () {
-            // TODO: Переход на экран бронирования
-            // Navigator.of(context).push(
-            //   MaterialPageRoute(
-            //     builder: (context) => BookingScreen(service: widget.service),
-            //   ),
-            // );
-          },
+          onPressed: _availableMasters.isEmpty 
+              ? null  // Disable button if no masters available
+              : () {
+                  // Navigate to booking screen with first available master
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => BookingScreen(
+                        service: widget.service,
+                        selectedMaster: _availableMasters.isNotEmpty ? _availableMasters.first : null,
+                      ),
+                    ),
+                  );
+                },
           child: Text(localizations.translate('book_service')),
         ),
       ),

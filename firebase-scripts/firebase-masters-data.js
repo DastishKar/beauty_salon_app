@@ -323,7 +323,6 @@ async function linkMastersToServices() {
     'barbershop': [] // Услуги барбершопа
   };
   
-  // Распределяем услуги по категориям
   servicesSnapshot.forEach(doc => {
     const serviceData = doc.data();
     if (serviceData.category === '2') { // ID категории "Парикмахерские услуги"
@@ -332,6 +331,8 @@ async function linkMastersToServices() {
       servicesByCategory.nails.push(doc.id);
     } else if (serviceData.category === '4') { // ID категории "Макияж"
       servicesByCategory.makeup.push(doc.id);
+    } else if (serviceData.category === '5') { // ID категории "Барбершоп"
+      servicesByCategory.barbershop.push(doc.id);
     }
   });
   
