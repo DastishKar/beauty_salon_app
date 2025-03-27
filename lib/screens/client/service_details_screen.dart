@@ -1,9 +1,5 @@
 // lib/screens/client/service_details_screen.dart
 
-import 'package:beauty_salon_app/screens/client/master_details_screen.dart';
-import 'package:beauty_salon_app/screens/client/booking_screen.dart';
-import 'package:beauty_salon_app/services/masters_service.dart';
-import 'package:beauty_salon_app/widgets/master_card.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -11,13 +7,19 @@ import '../../l10n/app_localizations.dart';
 import '../../models/service_model.dart';
 import '../../models/master_model.dart';
 import '../../services/language_service.dart';
+import '../../services/masters_service.dart';
+import '../../widgets/master_card.dart';
+import 'master_details_screen.dart';
+import 'booking_screen.dart';
 
 class ServiceDetailsScreen extends StatefulWidget {
   final ServiceModel service;
+  final bool isForBooking;
 
   const ServiceDetailsScreen({
     super.key,
     required this.service,
+    this.isForBooking = false,
   });
 
   @override
@@ -43,19 +45,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   
     try {
       final mastersService = MastersService();
-      
-      // Debug information
-      debugPrint('Loading masters for service ID: ${widget.service.id}');
-      debugPrint('Service category: ${widget.service.category}');
-      debugPrint('Service available masters: ${widget.service.availableMasters}');
-      
       final masters = await mastersService.getMastersByService(widget.service.id);
-      
-      // Debug the results
-      debugPrint('Found ${masters.length} masters for this service');
-      if (masters.isNotEmpty) {
-        debugPrint('First master name: ${masters.first.displayName}');
-      }
       
       if (mounted) {
         setState(() {
@@ -186,66 +176,72 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                   const SizedBox(height: 12),
                   if (_availableMasters.isEmpty)
                     Center(
-                      child: Column(
-                        children: [
-                          Text(
-                            localizations.translate('no_available_masters'),
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                          const SizedBox(height: 8),
-                          // Show debug info for no masters only in debug mode
-                          if (Theme.of(context).platform == TargetPlatform.android) 
-                          Text(
-                            'Service ID: ${widget.service.id}, Category: ${widget.service.category}',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
+                      child: Text(
+                        localizations.translate('no_available_masters'),
+                        style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ),
                   
-                   //Список карточек мастеров будет здесь
+                  // Список карточек мастеров
                   if (_availableMasters.isNotEmpty)
-                   SizedBox(
-                     height: 200, // Increased height for better visibility
+                    SizedBox(
+                      height: 200,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
                         itemCount: _availableMasters.length,
                         itemBuilder: (context, index) {
                           final master = _availableMasters[index];
-                           return Padding(
-                             padding: const EdgeInsets.only(right: 12.0),
-                             child: SizedBox(
-                               width: 150, // Set fixed width for better layout
-                               child: MasterCard(
-                                 master: master,
-                                 isSmall: true,
-                                 onTap: () {
-                                   Navigator.of(context).push(
-                                     MaterialPageRoute(
-                                       builder: (context) => MasterDetailsScreen(
-                                         master: master,
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 12.0),
+                            child: SizedBox(
+                              width: 150,
+                              child: MasterCard(
+                                master: master,
+                                isSmall: true,
+                                onTap: () {
+                                  // Если мы в режиме бронирования, перейти прямо на экран бронирования с выбранным мастером
+                                  if (widget.isForBooking) {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (context) => BookingScreen(
+                                          service: widget.service,
+                                          selectedMaster: master,
+                                        ),
+                                      ),
+                                    ).then((result) {
+                                      // Если бронирование было успешным, вернемся из всех экранов выбора
+                                      if (result == true) {
+                                        Navigator.of(context)
+                                          .popUntil((route) => route.isFirst || route.settings.name == '/appointments');
+                                      }
+                                    });
+                                  } else {
+                                    // Обычный просмотр деталей мастера
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (context) => MasterDetailsScreen(
+                                          master: master,
                                         ),
                                       ),
                                     );
-                                  },
-                                ),
+                                  }
+                                },
                               ),
-                            );
+                            ),
+                          );
                         },
-                     ),
-                   ),
-               ],
-             ),
+                      ),
+                    ),
+                ],
+              ),
             ),
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.all(16.0),
         child: ElevatedButton(
           onPressed: _availableMasters.isEmpty 
-              ? null  // Disable button if no masters available
+              ? null
               : () {
-                  // Navigate to booking screen with first available master
+                  // Переход на экран бронирования с первым доступным мастером
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (context) => BookingScreen(
@@ -253,7 +249,14 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                         selectedMaster: _availableMasters.isNotEmpty ? _availableMasters.first : null,
                       ),
                     ),
-                  );
+                  ).then((result) {
+                    // Если бронирование было успешным и мы в режиме бронирования,
+                    // вернемся обратно на экран записей
+                    if (result == true && widget.isForBooking) {
+                      Navigator.of(context)
+                        .popUntil((route) => route.isFirst || route.settings.name == '/appointments');
+                    }
+                  });
                 },
           child: Text(localizations.translate('book_service')),
         ),

@@ -11,7 +11,10 @@ import '../../widgets/service_card.dart';
 import 'service_details_screen.dart';
 
 class ServicesScreen extends StatefulWidget {
-  const ServicesScreen({super.key});
+  // Параметр, указывающий, используется ли экран для бронирования
+  final bool isForBooking;
+
+  const ServicesScreen({super.key, this.isForBooking = false});
 
   @override
   State<ServicesScreen> createState() => _ServicesScreenState();
@@ -25,7 +28,6 @@ class _ServicesScreenState extends State<ServicesScreen> with SingleTickerProvid
   List<ServiceModel> _services = [];
   List<ServiceModel> _filteredServices = [];
   String _searchQuery = '';
-
 
  @override
   void initState() {
@@ -45,7 +47,7 @@ class _ServicesScreenState extends State<ServicesScreen> with SingleTickerProvid
   Future<void> _loadCategories() async {
     setState(() {
     _isLoading = true;
-  });
+    });
 
    try {
      // Create an instance of ServicesService
@@ -170,7 +172,8 @@ class _ServicesScreenState extends State<ServicesScreen> with SingleTickerProvid
     return Scaffold(
       appBar: AppBar(
         title: Text(localizations.translate('services')),
-        automaticallyImplyLeading: false,
+        // Если экран используется для бронирования, показываем кнопку "назад"
+        automaticallyImplyLeading: widget.isForBooking,
         bottom: _isLoading
             ? null
             : TabBar(
@@ -255,11 +258,24 @@ class _ServicesScreenState extends State<ServicesScreen> with SingleTickerProvid
         return ServiceCard(
           service: service,
           onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => ServiceDetailsScreen(service: service),
-              ),
-            );
+            // Если экран используется для бронирования, возвращаем выбранную услугу
+            if (widget.isForBooking) {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => ServiceDetailsScreen(
+                    service: service,
+                    isForBooking: true,
+                  ),
+                ),
+              );
+            } else {
+              // Обычный просмотр деталей услуги
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => ServiceDetailsScreen(service: service),
+                ),
+              );
+            }
           },
         );
       },

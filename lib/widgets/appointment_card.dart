@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
 import '../models/appointment_model.dart';
 
-
 class AppointmentCard extends StatelessWidget {
   final AppointmentModel appointment;
   final VoidCallback? onTap;
@@ -29,21 +28,28 @@ class AppointmentCard extends StatelessWidget {
     
     // Определение статуса
     Color statusColor;
+    IconData statusIcon;
+    
     switch(appointment.status) {
       case 'booked':
         statusColor = Colors.blue;
+        statusIcon = Icons.event_available;
         break;
       case 'completed':
         statusColor = Colors.green;
+        statusIcon = Icons.check_circle;
         break;
       case 'cancelled':
         statusColor = Colors.red;
+        statusIcon = Icons.cancel;
         break;
       case 'no-show':
         statusColor = Colors.orange;
+        statusIcon = Icons.highlight_off;
         break;
       default:
         statusColor = Colors.grey;
+        statusIcon = Icons.help_outline;
     }
     
     return Card(
@@ -80,13 +86,20 @@ class AppointmentCard extends StatelessWidget {
                       color: statusColor.withAlpha((0.1*255).round()),
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Text(
-                      localizations.translate(appointment.status),
-                      style: TextStyle(
-                        color: statusColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(statusIcon, size: 14, color: statusColor),
+                        const SizedBox(width: 4),
+                        Text(
+                          localizations.translate(appointment.status),
+                          style: TextStyle(
+                            color: statusColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -156,19 +169,44 @@ class AppointmentCard extends StatelessWidget {
                 ],
               ),
               
+              // Примечания (если есть)
+              if (appointment.notes != null && appointment.notes!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.note,
+                      size: 16,
+                      color: Colors.grey,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        appointment.notes!,
+                        style: Theme.of(context).textTheme.bodySmall,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              
               // Кнопка отмены (только для активных записей)
               if (appointment.status == 'booked' && appointment.canBeCancelled && onCancel != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
                   child: Align(
                     alignment: Alignment.centerRight,
-                    child: OutlinedButton(
+                    child: OutlinedButton.icon(
                       onPressed: onCancel,
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.red,
                         side: const BorderSide(color: Colors.red),
                       ),
-                      child: Text(localizations.translate('cancel_appointment')),
+                      icon: const Icon(Icons.cancel, size: 16),
+                      label: Text(localizations.translate('cancel_appointment')),
                     ),
                   ),
                 ),

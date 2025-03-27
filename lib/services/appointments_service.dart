@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/appointment_model.dart';
-
 import 'services_service.dart';
 import 'masters_service.dart';
 
@@ -23,9 +22,21 @@ class AppointmentsService {
           .orderBy('startTime')
           .get();
       
-      return snapshot.docs.map((doc) {
-        return AppointmentModel.fromMap(doc.id, doc.data() as Map<String, dynamic>);
-      }).toList();
+      final List<AppointmentModel> appointments = [];
+      
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        // Преобразуем строку даты в объект DateTime
+        final String dateStr = data['date'] as String;
+        final date = DateTime.parse(dateStr);
+        
+        appointments.add(AppointmentModel.fromMap(doc.id, {
+          ...data,
+          'date': date,
+        }));
+      }
+      
+      return appointments;
     } catch (e) {
       if (kDebugMode) {
         print('Ошибка при получении записей пользователя: $e');
@@ -39,28 +50,33 @@ class AppointmentsService {
     try {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
+      final formattedToday = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
       
       final QuerySnapshot snapshot = await _firestore
           .collection('appointments')
           .where('clientId', isEqualTo: userId)
           .where('status', isEqualTo: 'booked')
+          // Здесь мы используем "больше или равно" для даты
+          .where('date', isGreaterThanOrEqualTo: formattedToday)
           .orderBy('date')
           .orderBy('startTime')
           .get();
       
-      final List<AppointmentModel> appointments = snapshot.docs.map((doc) {
-        return AppointmentModel.fromMap(doc.id, doc.data() as Map<String, dynamic>);
-      }).toList();
+      final List<AppointmentModel> appointments = [];
       
-      // Фильтруем только предстоящие записи (сегодняшние и будущие)
-      return appointments.where((appointment) {
-        final appointmentDate = DateTime(
-          appointment.date.year, 
-          appointment.date.month, 
-          appointment.date.day
-        );
-        return appointmentDate.isAtSameMomentAs(today) || appointmentDate.isAfter(today);
-      }).toList();
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        // Преобразуем строку даты в объект DateTime
+        final String dateStr = data['date'] as String;
+        final date = DateTime.parse(dateStr);
+        
+        appointments.add(AppointmentModel.fromMap(doc.id, {
+          ...data,
+          'date': date,
+        }));
+      }
+      
+      return appointments;
     } catch (e) {
       if (kDebugMode) {
         print('Ошибка при получении предстоящих записей: $e');
@@ -74,7 +90,9 @@ class AppointmentsService {
     try {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
+      final formattedToday = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
       
+      // Запрос всех записей пользователя
       final QuerySnapshot snapshot = await _firestore
           .collection('appointments')
           .where('clientId', isEqualTo: userId)
@@ -82,23 +100,27 @@ class AppointmentsService {
           .orderBy('startTime', descending: true)
           .get();
       
-      final List<AppointmentModel> appointments = snapshot.docs.map((doc) {
-        return AppointmentModel.fromMap(doc.id, doc.data() as Map<String, dynamic>);
-      }).toList();
+      final List<AppointmentModel> appointments = [];
       
-      // Фильтруем только прошедшие записи или со статусом "completed", "cancelled", "no-show"
-      return appointments.where((appointment) {
-        final appointmentDate = DateTime(
-          appointment.date.year, 
-          appointment.date.month, 
-          appointment.date.day
-        );
-        final isPastDate = appointmentDate.isBefore(today);
-        final isCompletedStatus = appointment.status == 'completed' ||
-                              appointment.status == 'cancelled' ||
-                              appointment.status == 'no-show';
-        return isPastDate || isCompletedStatus;
-      }).toList();
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final String dateStr = data['date'] as String;
+        final date = DateTime.parse(dateStr);
+        final status = data['status'] as String;
+        
+        // Фильтруем только прошедшие записи или записи со статусом 'completed', 'cancelled', 'no-show'
+        final isPastDate = date.isBefore(today);
+        final isCompletedStatus = status == 'completed' || status == 'cancelled' || status == 'no-show';
+        
+        if (isPastDate || isCompletedStatus) {
+          appointments.add(AppointmentModel.fromMap(doc.id, {
+            ...data,
+            'date': date,
+          }));
+        }
+      }
+      
+      return appointments;
     } catch (e) {
       if (kDebugMode) {
         print('Ошибка при получении прошедших записей: $e');
@@ -116,7 +138,14 @@ class AppointmentsService {
           .get();
       
       if (doc.exists) {
-        return AppointmentModel.fromMap(doc.id, doc.data() as Map<String, dynamic>);
+        final data = doc.data() as Map<String, dynamic>;
+        final String dateStr = data['date'] as String;
+        final date = DateTime.parse(dateStr);
+        
+        return AppointmentModel.fromMap(doc.id, {
+          ...data,
+          'date': date,
+        });
       }
       return null;
     } catch (e) {

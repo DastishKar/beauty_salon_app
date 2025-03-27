@@ -40,6 +40,32 @@ class AppointmentModel {
   });
 
   factory AppointmentModel.fromMap(String id, Map<String, dynamic> data) {
+    // Парсинг даты: проверяем, является ли data['date'] строкой или DateTime
+    DateTime date;
+    if (data['date'] is DateTime) {
+      date = data['date'] as DateTime;
+    } else if (data['date'] is String) {
+      date = DateTime.parse(data['date']);
+    } else {
+      // Fallback если дата не определена или имеет неправильный формат
+      date = DateTime.now();
+    }
+    
+    // Безопасное извлечение меток времени
+    DateTime createdAt;
+    if (data['createdAt'] is int) {
+      createdAt = DateTime.fromMillisecondsSinceEpoch(data['createdAt']);
+    } else {
+      createdAt = DateTime.now();
+    }
+    
+    DateTime updatedAt;
+    if (data['updatedAt'] is int) {
+      updatedAt = DateTime.fromMillisecondsSinceEpoch(data['updatedAt']);
+    } else {
+      updatedAt = DateTime.now();
+    }
+
     return AppointmentModel(
       id: id,
       clientId: data['clientId'] ?? '',
@@ -47,20 +73,14 @@ class AppointmentModel {
       masterName: data['masterName'] ?? '',
       serviceId: data['serviceId'] ?? '',
       serviceName: data['serviceName'] ?? '',
-      date: data['date'] != null 
-          ? DateTime.parse(data['date']) 
-          : DateTime.now(),
+      date: date,
       startTime: data['startTime'] ?? '',
       endTime: data['endTime'] ?? '',
-      price: data['price'] ?? 0,
+      price: (data['price'] is int) ? data['price'] : 0,
       status: data['status'] ?? 'booked',
       notes: data['notes'],
-      createdAt: data['createdAt'] != null 
-          ? DateTime.fromMillisecondsSinceEpoch(data['createdAt']) 
-          : DateTime.now(),
-      updatedAt: data['updatedAt'] != null 
-          ? DateTime.fromMillisecondsSinceEpoch(data['updatedAt']) 
-          : DateTime.now(),
+      createdAt: createdAt,
+      updatedAt: updatedAt,
       reminder15min: data['reminder15min'] ?? false,
       reminder1hour: data['reminder1hour'] ?? false,
       reminder1day: data['reminder1day'] ?? false,
@@ -74,14 +94,14 @@ class AppointmentModel {
       'masterName': masterName,
       'serviceId': serviceId,
       'serviceName': serviceName,
-      'date': date.toIso8601String().split('T')[0],
+      'date': date.toIso8601String().split('T')[0], // Форматируем дату как YYYY-MM-DD
       'startTime': startTime,
       'endTime': endTime,
       'price': price,
       'status': status,
       'notes': notes,
       'createdAt': createdAt.millisecondsSinceEpoch,
-      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+      'updatedAt': updatedAt.millisecondsSinceEpoch,
       'reminder15min': reminder15min,
       'reminder1hour': reminder1hour,
       'reminder1day': reminder1day,
@@ -128,9 +148,12 @@ class AppointmentModel {
   // Проверка истекла ли запись
   bool get isExpired {
     final now = DateTime.now();
-    final appointmentDate = date.copyWith(
-      hour: int.parse(endTime.split(':')[0]),
-      minute: int.parse(endTime.split(':')[1]),
+    final appointmentDate = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      int.parse(endTime.split(':')[0]),
+      int.parse(endTime.split(':')[1]),
     );
     return now.isAfter(appointmentDate);
   }
@@ -140,9 +163,12 @@ class AppointmentModel {
     if (status != 'booked') return false;
     
     final now = DateTime.now();
-    final appointmentDate = date.copyWith(
-      hour: int.parse(startTime.split(':')[0]),
-      minute: int.parse(startTime.split(':')[1]),
+    final appointmentDate = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      int.parse(startTime.split(':')[0]),
+      int.parse(startTime.split(':')[1]),
     );
     final difference = appointmentDate.difference(now).inHours;
     

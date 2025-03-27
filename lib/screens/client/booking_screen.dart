@@ -9,8 +9,10 @@ import '../../models/service_model.dart';
 import '../../models/master_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/language_service.dart';
+import '../../services/masters_service.dart';
+import '../../services/appointments_service.dart';
 import '../../widgets/loading_overlay.dart';
-
+import 'home_screen.dart';
 
 class BookingScreen extends StatefulWidget {
   final ServiceModel service;
@@ -34,7 +36,7 @@ class _BookingScreenState extends State<BookingScreen> {
   DateTime _selectedDay = DateTime.now();
   MasterModel? _selectedMaster;
   String? _selectedTime;
-  final List<MasterModel> _availableMasters = [];
+  List<MasterModel> _availableMasters = [];
   List<String> _availableTimes = [];
 
   @override
@@ -56,44 +58,91 @@ class _BookingScreenState extends State<BookingScreen> {
       _isLoading = true;
     });
     
-    // TODO: Реализовать загрузку мастеров из Firestore
-    // Пока используем заглушку
-    await Future.delayed(const Duration(seconds: 1));
-    
-    setState(() {
-      _isLoading = false;
-      // После выбора мастера нужно загрузить доступное время
-      _loadAvailableTimes();
-    });
+    try {
+      final mastersService = MastersService();
+      final masters = await mastersService.getMastersByService(widget.service.id);
+      
+      if (mounted) {
+        setState(() {
+          _availableMasters = masters;
+          
+          // Если при входе на экран мастер не был выбран, а у нас есть доступные мастера,
+          // выбираем первого мастера по умолчанию
+          if (_selectedMaster == null && masters.isNotEmpty) {
+            _selectedMaster = masters.first;
+          }
+          
+          _isLoading = false;
+        });
+        
+        // После загрузки мастеров загружаем доступное время
+        if (_selectedMaster != null) {
+          _loadAvailableTimes();
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка при загрузке мастеров: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
   }
 
   // Загрузка доступного времени для записи
   Future<void> _loadAvailableTimes() async {
+    if (_selectedMaster == null) {
+      setState(() {
+        _availableTimes = [];
+        _selectedTime = null;
+      });
+      return;
+    }
+    
     setState(() {
       _isLoading = true;
       _selectedTime = null;
     });
     
-    // TODO: Реализовать загрузку доступного времени из Firestore
-    // Пока используем заглушку со временем с 9:00 до 18:00 с шагом 30 минут
-    await Future.delayed(const Duration(seconds: 1));
-    
-    final List<String> times = [];
-    final DateTime startTime = DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day, 9, 0);
-    final DateTime endTime = DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day, 18, 0);
-    
-    DateTime currentTime = startTime;
-    while (currentTime.isBefore(endTime)) {
-      times.add(
-        '${currentTime.hour.toString().padLeft(2, '0')}:${currentTime.minute.toString().padLeft(2, '0')}'
+    try {
+      // Получаем доступное время для выбранного мастера и дня
+      final mastersService = MastersService();
+      final times = await mastersService.getAvailableTimeSlots(
+        _selectedMaster!.id, 
+        _selectedDay
       );
-      currentTime = currentTime.add(const Duration(minutes: 30));
+      
+      setState(() {
+        _availableTimes = times;
+        _isLoading = false;
+      });
+    } catch (e) {
+      // Используем заглушку со временем с 9:00 до 18:00 с шагом 30 минут при ошибке
+      debugPrint('Ошибка при загрузке времени: $e');
+      
+      final List<String> times = [];
+      final DateTime startTime = DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day, 9, 0);
+      final DateTime endTime = DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day, 18, 0);
+      
+      DateTime currentTime = startTime;
+      while (currentTime.isBefore(endTime)) {
+        times.add(
+          '${currentTime.hour.toString().padLeft(2, '0')}:${currentTime.minute.toString().padLeft(2, '0')}'
+        );
+        currentTime = currentTime.add(const Duration(minutes: 30));
+      }
+      
+      setState(() {
+        _availableTimes = times;
+        _isLoading = false;
+      });
     }
-    
-    setState(() {
-      _availableTimes = times;
-      _isLoading = false;
-    });
   }
 
   // Создание записи
@@ -118,23 +167,20 @@ class _BookingScreenState extends State<BookingScreen> {
       
       if (user == null) throw Exception('User not authenticated');
       
-      // Расчет времени окончания услуги
-      final startTimeParts = _selectedTime!.split(':');
-      final startHour = int.parse(startTimeParts[0]);
-      final startMinute = int.parse(startTimeParts[1]);
-      
-      final startDateTime = DateTime(
-        _selectedDay.year,
-        _selectedDay.month,
-        _selectedDay.day,
-        startHour,
-        startMinute,
+      // Создание записи в Firestore
+      final appointmentsService = AppointmentsService();
+      final appointmentId = await appointmentsService.createAppointment(
+        clientId: user.id,
+        masterId: _selectedMaster!.id,
+        serviceId: widget.service.id,
+        date: _selectedDay,
+        startTime: _selectedTime!,
+        notes: _notesController.text.isEmpty ? null : _notesController.text,
       );
       
-      startDateTime.add(Duration(minutes: widget.service.duration));
-      
-      // TODO: Создание записи в Firestore
-      await Future.delayed(const Duration(seconds: 2));
+      if (appointmentId == null) {
+        throw Exception('Failed to create appointment');
+      }
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -143,7 +189,16 @@ class _BookingScreenState extends State<BookingScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.of(context).pop(true); // Возвращаем true, чтобы обновить список записей
+        
+        // Устанавливаем флаг необходимости обновления записей в HomeScreen
+        if (HomeScreen.homeKey.currentState != null) {
+          HomeScreen.homeKey.currentState!.setNeedRefreshAppointments();
+        }
+        
+
+        
+        // Возвращаемся на предыдущий экран
+        Navigator.of(context).pop(true);
       }
     } catch (e) {
       if (mounted) {
@@ -201,12 +256,20 @@ class _BookingScreenState extends State<BookingScreen> {
                               decoration: BoxDecoration(
                                 color: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
                                 borderRadius: BorderRadius.circular(8),
+                                image: widget.service.photoURL != null
+                                    ? DecorationImage(
+                                        image: NetworkImage(widget.service.photoURL!),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
                               ),
-                              child: Icon(
-                                Icons.spa,
-                                size: 30,
-                                color: Theme.of(context).primaryColor,
-                              ),
+                              child: widget.service.photoURL == null
+                                ? Icon(
+                                    Icons.spa,
+                                    size: 30,
+                                    color: Theme.of(context).primaryColor,
+                                  )
+                                : null,
                             ),
                             const SizedBox(width: 16),
                             Expanded(
@@ -246,57 +309,6 @@ class _BookingScreenState extends State<BookingScreen> {
                           ],
                         ),
                       ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                
-                // Выбор даты
-                Text(
-                  localizations.translate('select_date'),
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 8),
-                Card(
-                  child: TableCalendar(
-                    firstDay: DateTime.now(),
-                    lastDay: DateTime.now().add(const Duration(days: 30)),
-                    focusedDay: _selectedDay,
-                    selectedDayPredicate: (day) {
-                      return isSameDay(_selectedDay, day);
-                    },
-                    onDaySelected: (selectedDay, focusedDay) {
-                      setState(() {
-                        _selectedDay = selectedDay;
-                      });
-                      _loadAvailableTimes();
-                    },
-                    calendarFormat: CalendarFormat.twoWeeks,
-                    availableCalendarFormats: const {
-                      CalendarFormat.twoWeeks: 'Две недели',
-                      CalendarFormat.month: 'Месяц',
-                    },
-                    headerStyle: HeaderStyle(
-                      formatButtonVisible: true,
-                      titleCentered: true,
-                      formatButtonShowsNext: false,
-                      formatButtonDecoration: BoxDecoration(
-                        color: Theme.of(context).primaryColor,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      formatButtonTextStyle: const TextStyle(
-                        color: Colors.white,
-                      ),
-                    ),
-                    calendarStyle: CalendarStyle(
-                      selectedDecoration: BoxDecoration(
-                        color: Theme.of(context).primaryColor,
-                        shape: BoxShape.circle,
-                      ),
-                      todayDecoration: BoxDecoration(
-                        color: Theme.of(context).primaryColor.withAlpha((0.3*255).round()),
-                        shape: BoxShape.circle,
-                      ),
                     ),
                   ),
                 ),
@@ -380,6 +392,57 @@ class _BookingScreenState extends State<BookingScreen> {
                   ),
                 const SizedBox(height: 24),
                 
+                // Выбор даты
+                Text(
+                  localizations.translate('select_date'),
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: TableCalendar(
+                    firstDay: DateTime.now(),
+                    lastDay: DateTime.now().add(const Duration(days: 30)),
+                    focusedDay: _selectedDay,
+                    selectedDayPredicate: (day) {
+                      return isSameDay(_selectedDay, day);
+                    },
+                    onDaySelected: (selectedDay, focusedDay) {
+                      setState(() {
+                        _selectedDay = selectedDay;
+                      });
+                      _loadAvailableTimes();
+                    },
+                    calendarFormat: CalendarFormat.twoWeeks,
+                    availableCalendarFormats: const {
+                      CalendarFormat.twoWeeks: 'Две недели',
+                      CalendarFormat.month: 'Месяц',
+                    },
+                    headerStyle: HeaderStyle(
+                      formatButtonVisible: true,
+                      titleCentered: true,
+                      formatButtonShowsNext: false,
+                      formatButtonDecoration: BoxDecoration(
+                        color: Theme.of(context).primaryColor,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      formatButtonTextStyle: const TextStyle(
+                        color: Colors.white,
+                      ),
+                    ),
+                    calendarStyle: CalendarStyle(
+                      selectedDecoration: BoxDecoration(
+                        color: Theme.of(context).primaryColor,
+                        shape: BoxShape.circle,
+                      ),
+                      todayDecoration: BoxDecoration(
+                        color: Theme.of(context).primaryColor.withAlpha((0.3*255).round()),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                
                 // Выбор времени
                 Text(
                   localizations.translate('select_time'),
@@ -451,7 +514,9 @@ class _BookingScreenState extends State<BookingScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _createBooking,
+                    onPressed: _selectedMaster != null && _selectedTime != null
+                      ? _createBooking
+                      : null,
                     child: Text(localizations.translate('confirm_booking')),
                   ),
                 ),

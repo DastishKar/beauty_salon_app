@@ -1,12 +1,10 @@
 // lib/screens/client/masters_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/master_model.dart';
 import '../../services/masters_service.dart';
-import '../../services/language_service.dart';
 import '../../widgets/master_card.dart';
 import '../../widgets/loading_overlay.dart';
 import 'master_details_screen.dart';
@@ -142,7 +140,6 @@ class _MastersScreenState extends State<MastersScreen> {
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
-    final languageCode = Provider.of<LanguageService>(context).languageCode;
     
     return Scaffold(
       appBar: AppBar(
@@ -216,7 +213,7 @@ class _MastersScreenState extends State<MastersScreen> {
                             },
                           ),
                         );
-                      }).toList(),
+                      }),
                     ],
                   ),
                 ),
