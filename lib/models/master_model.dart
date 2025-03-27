@@ -1,5 +1,7 @@
 // lib/models/master_model.dart
 
+import 'package:flutter/material.dart';
+
 class MasterModel {
   final String id;
   final String userId;
@@ -34,42 +36,58 @@ class MasterModel {
   }
 
   factory MasterModel.fromMap(String id, Map<String, dynamic> data) {
-    // Парсинг расписания
-    Map<String, DaySchedule> scheduleMap = {};
-    if (data['schedule'] != null) {
-      data['schedule'].forEach((day, value) {
-        List<TimeBreak> breaks = [];
-        if (value['breaks'] != null) {
-          for (var breakItem in value['breaks']) {
-            breaks.add(TimeBreak(
-              start: breakItem['start'],
-              end: breakItem['end'],
-            ));
+  // Safely parse schedule with null checking
+  Map<String, DaySchedule> scheduleMap = {};
+  
+  try {
+    if (data['schedule'] != null && data['schedule'] is Map) {
+      (data['schedule'] as Map).forEach((day, value) {
+        if (value != null && value is Map) {
+          List<TimeBreak> breaks = [];
+          
+          // Safely access breaks with null checking
+          if (value['breaks'] != null && value['breaks'] is List) {
+            for (var breakItem in value['breaks']) {
+              if (breakItem is Map && breakItem['start'] != null && breakItem['end'] != null) {
+                breaks.add(TimeBreak(
+                  start: breakItem['start'].toString(),
+                  end: breakItem['end'].toString(),
+                ));
+              }
+            }
+          }
+          
+          // Only add valid schedule entries
+          if (value['start'] != null && value['end'] != null) {
+            scheduleMap[day.toString()] = DaySchedule(
+              start: value['start'].toString(),
+              end: value['end'].toString(),
+              breaks: breaks,
+            );
           }
         }
-        
-        scheduleMap[day] = DaySchedule(
-          start: value['start'],
-          end: value['end'],
-          breaks: breaks,
-        );
       });
     }
-
-    return MasterModel(
-      id: id,
-      userId: data['userId'] ?? '',
-      displayName: data['displayName'] ?? '',
-      specializations: List<String>.from(data['specializations'] ?? []),
-      experience: data['experience'] ?? '',
-      description: Map<String, String>.from(data['description'] ?? {}),
-      photoURL: data['photoURL'],
-      portfolio: List<String>.from(data['portfolio'] ?? []),
-      schedule: scheduleMap,
-      rating: (data['rating'] ?? 0.0).toDouble(),
-      reviewsCount: data['reviewsCount'] ?? 0,
-    );
+  } catch (e) {
+    debugPrint('Error parsing master schedule: $e');
   }
+
+  return MasterModel(
+    id: id,
+    userId: data['userId'] ?? '',
+    displayName: data['displayName'] ?? '',
+    specializations: List<String>.from(data['specializations'] ?? []),
+    experience: data['experience'] ?? '',
+    description: Map<String, String>.from(data['description'] ?? {}),
+    photoURL: data['photoURL'],
+    portfolio: List<String>.from(data['portfolio'] ?? []),
+    schedule: scheduleMap,
+    rating: (data['rating'] ?? 0.0).toDouble(),
+    reviewsCount: data['reviewsCount'] ?? 0,
+  );
+}
+
+    
 
   Map<String, dynamic> toMap() {
     // Преобразование расписания в Map

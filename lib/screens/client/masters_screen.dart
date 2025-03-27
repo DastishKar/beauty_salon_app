@@ -47,41 +47,64 @@ class _MastersScreenState extends State<MastersScreen> {
 
   // Загрузка мастеров из Firebase
   Future<void> _loadMasters() async {
-    setState(() {
-      _isLoading = true;
-    });
+  setState(() {
+    _isLoading = true;
+  });
 
-    try {
-      final mastersService = MastersService();
-      final masters = await mastersService.getAllMasters();
+  try {
+    final mastersService = MastersService();
+    
+    // Use the debugPrint to see if the method is executing
+    debugPrint('Attempting to load masters from Firebase...');
+    
+    final masters = await mastersService.getAllMasters();
+    
+    // Log the number of masters retrieved
+    debugPrint('Loaded ${masters.length} masters from Firebase');
+    
+    // Extract unique specializations
+    final Set<String> specializations = {};
+    for (var master in masters) {
+      specializations.addAll(master.specializations);
+    }
+    
+    setState(() {
+      _masters = masters;
+      _specializationsList = specializations.toList()..sort();
+      _filterMasters();
+      _isLoading = false;
+    });
+    
+    // If no masters were found, show a message
+    if (masters.isEmpty) {
+      debugPrint('No masters found in Firebase');
       
-      // Извлекаем уникальные специализации
-      final Set<String> specializations = {};
-      for (var master in masters) {
-        specializations.addAll(master.specializations);
-      }
-      
-      setState(() {
-        _masters = masters;
-        _specializationsList = specializations.toList()..sort();
-        _filterMasters();
-        _isLoading = false;
-      });
-    } catch (e) {
-      // В случае ошибки показываем сообщение и скрываем индикатор загрузки
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка при загрузке данных: $e'),
-            backgroundColor: Theme.of(context).colorScheme.error,
+          const SnackBar(
+            content: Text('No masters found. Please add masters to your database.'),
+            duration: Duration(seconds: 3),
           ),
         );
-        setState(() {
-          _isLoading = false;
-        });
       }
     }
+  } catch (e) {
+    // Log the error
+    debugPrint('Error loading masters: $e');
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error loading masters: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
+}
 
   // Фильтрация мастеров по поисковому запросу и специализации
   void _filterMasters() {
