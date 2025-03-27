@@ -45,9 +45,10 @@ class _MastersScreenState extends State<MastersScreen> {
 
   // Загрузка мастеров из Firebase
   Future<void> _loadMasters() async {
-  setState(() {
-    _isLoading = true;
-  });
+   if (!mounted) return;
+   setState(() {
+     _isLoading = true;
+    });
 
   try {
     final mastersService = MastersService();
@@ -59,6 +60,8 @@ class _MastersScreenState extends State<MastersScreen> {
     
     // Log the number of masters retrieved
     debugPrint('Loaded ${masters.length} masters from Firebase');
+
+    if (!mounted) return;
     
     // Extract unique specializations
     final Set<String> specializations = {};

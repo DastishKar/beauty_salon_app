@@ -14,13 +14,13 @@ class AppointmentsScreen extends StatefulWidget {
   const AppointmentsScreen({super.key});
 
   @override
-  State<AppointmentsScreen> createState() => _AppointmentsScreenState();
+  State<AppointmentsScreen> createState() => AppointmentsScreenState();
 }
 
 // Глобальный ключ для доступа к состоянию экрана из других мест
-final GlobalKey<_AppointmentsScreenState> appointmentsScreenKey = GlobalKey<_AppointmentsScreenState>();
+final GlobalKey<AppointmentsScreenState> appointmentsScreenKey = GlobalKey<AppointmentsScreenState>();
 
-class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTickerProviderStateMixin {
+class AppointmentsScreenState extends State<AppointmentsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _isLoading = true;
   List<AppointmentModel> _upcomingAppointments = [];

@@ -210,7 +210,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                                       ),
                                     ).then((result) {
                                       // Если бронирование было успешным, вернемся из всех экранов выбора
-                                      if (result == true) {
+                                      if (result == true && mounted) {
                                         Navigator.of(context)
                                           .popUntil((route) => route.isFirst || route.settings.name == '/appointments');
                                       }
@@ -252,7 +252,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                   ).then((result) {
                     // Если бронирование было успешным и мы в режиме бронирования,
                     // вернемся обратно на экран записей
-                    if (result == true && widget.isForBooking) {
+                    if (result == true && widget.isForBooking && mounted) {
                       Navigator.of(context)
                         .popUntil((route) => route.isFirst || route.settings.name == '/appointments');
                     }
