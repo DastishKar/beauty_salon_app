@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../models/appointment_model.dart';
 import 'services_service.dart';
 import 'masters_service.dart';
+import '../services/loyalty_service.dart';
 
 class AppointmentsService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -216,19 +217,33 @@ class AppointmentsService {
         'reminder1hour': false,
         'reminder1day': false,
       };
+
       
       // Сохраняем в Firestore
       final docRef = await _firestore
           .collection('appointments')
           .add(appointmentData);
-      
+          
+      // Получение сервиса лояльности
+      final loyaltyService = LoyaltyService();
+
+      // Начисление баллов за запись - ПОСЛЕ создания записи
+      await loyaltyService.addPointsForAppointment(
+        userId: clientId,
+        appointmentId: docRef.id,
+        serviceName: service.name['ru'] ?? '',
+        price: service.price,
+      );
+    
       return docRef.id;
     } catch (e) {
       if (kDebugMode) {
         print('Ошибка при создании записи: $e');
       }
-      return null;
+       return null;
     }
+  
+
   }
   
   // Отмена записи

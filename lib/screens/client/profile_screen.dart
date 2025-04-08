@@ -1,5 +1,6 @@
 // lib/screens/client/profile_screen.dart
 
+import 'package:beauty_salon_app/screens/client/loyalty_program_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -274,7 +275,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           title: Text(localizations.translate('loyalty_program')),
                           trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                           onTap: () {
-                            // TODO: Переход на экран программы лояльности
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => const LoyaltyProgramScreen(),
+                              ),
+                            );
+                        
                           },
                         ),
                       ],
