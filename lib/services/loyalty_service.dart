@@ -40,8 +40,17 @@ class LoyaltyService {
           .get();
 
       return snapshot.docs.map((doc) {
-        return LoyaltyTransactionModel.fromMap(
-            doc.id, doc.data() as Map<String, dynamic>);
+        final data = doc.data() as Map<String, dynamic>;
+        
+        // Исправляем обработку даты (timestamp)
+        if (data['date'] != null) {
+          if (data['date'] is Timestamp) {
+            // Преобразуем Timestamp в DateTime для модели
+            // Но оставляем его как есть, так как модель умеет обрабатывать Timestamp
+          }
+        }
+        
+        return LoyaltyTransactionModel.fromMap(doc.id, data);
       }).toList();
     } catch (e) {
       if (kDebugMode) {
@@ -179,6 +188,93 @@ class LoyaltyService {
     }
   }
 
+  // Получение использованных акций пользователя
+  Future<List<Map<String, dynamic>>> getUserRedeemedPromotions(String userId) async {
+    try {
+      // Получаем использования акций пользователем
+      final QuerySnapshot usageSnapshot = await _firestore
+          .collection('promotion_usages')
+          .where('userId', isEqualTo: userId)
+          .orderBy('date', descending: true)
+          .get();
+      
+      // Извлекаем ID акций
+      final List<String> promotionIds = usageSnapshot.docs
+          .map((doc) => (doc.data() as Map<String, dynamic>)['promotionId'] as String)
+          .toList();
+      
+      if (promotionIds.isEmpty) {
+        return [];
+      }
+      
+      // Ограничение для запросов Firestore
+      const int batchSize = 10;
+      final List<Map<String, dynamic>> results = [];
+      
+      // Обрабатываем акции партиями
+      for (int i = 0; i < promotionIds.length; i += batchSize) {
+        final end = (i + batchSize < promotionIds.length) ? i + batchSize : promotionIds.length;
+        final batch = promotionIds.sublist(i, end);
+        
+        final QuerySnapshot promoSnapshot = await _firestore
+            .collection('promotions')
+            .where(FieldPath.documentId, whereIn: batch)
+            .get();
+        
+        for (final promoDoc in promoSnapshot.docs) {
+          final promoData = promoDoc.data() as Map<String, dynamic>;
+          
+          // Находим соответствующую запись использования для получения даты
+          // Исправленная версия без orElse
+          QueryDocumentSnapshot? usageDoc;
+          try {
+            usageDoc = usageSnapshot.docs.firstWhere(
+              (doc) => (doc.data() as Map<String, dynamic>)['promotionId'] == promoDoc.id,
+            );
+          } catch (e) {
+            // Если не найдено, используем первый документ
+            usageDoc = usageSnapshot.docs.isNotEmpty ? usageSnapshot.docs.first : null;
+          }
+          
+          if (usageDoc == null) continue; // Пропускаем если нет связанного документа
+          
+          final usageData = usageDoc.data() as Map<String, dynamic>;
+          
+          // Обработка даты (timestamp)
+          dynamic redeemedAt = usageData['date'];
+          if (redeemedAt is Timestamp) {
+            redeemedAt = redeemedAt.toDate().millisecondsSinceEpoch;
+          }
+          
+          // Добавляем данные акции с дополнительной информацией об использовании
+          final combinedData = {
+            ...promoData,
+            'id': promoDoc.id,
+            'redeemedAt': redeemedAt,
+            'usageId': usageDoc.id,
+            'promoCode': usageData['promoCode'] ?? _generatePromoCode(promoDoc.id),
+          };
+          
+          results.add(combinedData);
+        }
+      }
+      
+      return results;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Ошибка при получении использованных акций: $e');
+      }
+      return [];
+    }
+  }
+
+  // Генерация промокода из строки
+  String _generatePromoCode(String input) {
+    // Используем первые 8 символов ID и делаем их заглавными
+    final code = input.substring(0, input.length > 8 ? 8 : input.length).toUpperCase();
+    return code;
+  }
+
   // Использование акции
   Future<bool> redeemPromotion({
     required String userId,
@@ -210,29 +306,59 @@ class LoyaltyService {
       final title = (promotionData['title'] as Map?)!.containsKey('ru')
           ? promotionData['title']['ru']
           : 'Акция';
+          
+      // Начинаем транзакцию для атомарности
+      return await _firestore.runTransaction<bool>((transaction) async {
+        // Получаем текущий документ пользователя
+        final DocumentSnapshot userDoc = await transaction.get(
+            _firestore.collection('users').doc(userId));
 
-      // Списываем баллы
-      final success = await deductPoints(
-        userId: userId,
-        points: points,
-        description: 'Использование акции: $title',
-        type: 'redeem',
-        referenceId: promotionId,
-      );
+        if (!userDoc.exists) {
+          throw Exception('User not found');
+        }
 
-      if (success) {
+        final userData = userDoc.data() as Map<String, dynamic>;
+        final currentPoints = userData['loyaltyPoints'] ?? 0;
+
+        // Проверяем, достаточно ли баллов
+        if (currentPoints < points) {
+          throw Exception('Not enough points');
+        }
+
+        final newPoints = currentPoints - points;
+
+        // Обновляем баллы пользователя
+        transaction.update(_firestore.collection('users').doc(userId), {
+          'loyaltyPoints': newPoints,
+        });
+
+        // Создаем запись о транзакции
+        final transactionRef = _firestore.collection('loyalty_transactions').doc();
+        transaction.set(transactionRef, {
+          'userId': userId,
+          'type': 'redeem',
+          'points': -points,
+          'description': 'Использование акции: $title',
+          'date': FieldValue.serverTimestamp(),
+          'referenceId': promotionId,
+        });
+
+        // Генерируем уникальный промокод
+        final promoCode = _generatePromoCode(promotionId + now.toString());
+
         // Создаем запись об использовании акции
-        await _firestore.collection('promotion_usages').add({
+        final usageRef = _firestore.collection('promotion_usages').doc();
+        transaction.set(usageRef, {
           'userId': userId,
           'promotionId': promotionId,
           'points': points,
           'date': FieldValue.serverTimestamp(),
+          'promoCode': promoCode,
+          'isUsed': false,
         });
 
         return true;
-      }
-
-      return false;
+      });
     } catch (e) {
       if (kDebugMode) {
         print('Ошибка при использовании акции: $e');
@@ -276,5 +402,46 @@ class LoyaltyService {
       description: reason,
       type: 'bonus',
     );
+  }
+  
+  // Отметить акцию как использованную в салоне
+  Future<bool> markPromotionAsUsed(String usageId) async {
+    try {
+      await _firestore
+          .collection('promotion_usages')
+          .doc(usageId)
+          .update({
+            'isUsed': true,
+            'usedAt': FieldValue.serverTimestamp(),
+          });
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Ошибка при отметке акции как использованной: $e');
+      }
+      return false;
+    }
+  }
+  
+  // Проверить, была ли использована акция
+  Future<bool> isPromotionUsed(String usageId) async {
+    try {
+      final DocumentSnapshot doc = await _firestore
+          .collection('promotion_usages')
+          .doc(usageId)
+          .get();
+          
+      if (!doc.exists) {
+        return false;
+      }
+      
+      final data = doc.data() as Map<String, dynamic>;
+      return data['isUsed'] ?? false;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Ошибка при проверке использования акции: $e');
+      }
+      return false;
+    }
   }
 }

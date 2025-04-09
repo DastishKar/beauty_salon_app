@@ -4,11 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
-import '../../../l10n/app_localizations.dart';
-import '../../../models/loyalty_transaction_model.dart';
-import '../../../services/auth_service.dart';
-import '../../../services/loyalty_service.dart';
-import '../../../widgets/loading_overlay.dart';
+import '../../l10n/app_localizations.dart';
+import '../../models/loyalty_transaction_model.dart';
+import '../../services/auth_service.dart';
+import '../../services/loyalty_service.dart';
+import '../../widgets/loading_overlay.dart';
+import '../../widgets/loyalty_badge.dart';
 
 class LoyaltyProgramScreen extends StatefulWidget {
   const LoyaltyProgramScreen({super.key});
@@ -19,15 +20,18 @@ class LoyaltyProgramScreen extends StatefulWidget {
 
 class _LoyaltyProgramScreenState extends State<LoyaltyProgramScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final LoyaltyService _loyaltyService = LoyaltyService();
+  
   bool _isLoading = true;
   int _loyaltyPoints = 0;
   List<LoyaltyTransactionModel> _transactions = [];
   List<Map<String, dynamic>> _availablePromotions = [];
+  List<Map<String, dynamic>> _redeemedPromotions = []; // Track redeemed promotions
   
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this); // Added a tab for redeemed promotions
     _loadLoyaltyData();
   }
   
@@ -45,26 +49,30 @@ class _LoyaltyProgramScreenState extends State<LoyaltyProgramScreen> with Single
     
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
-      final loyaltyService = LoyaltyService();
-      
       final user = authService.currentUserModel;
+      
       if (user == null) {
         throw Exception('User not authenticated');
       }
       
-      // Получаем баллы лояльности
-      _loyaltyPoints = user.loyaltyPoints;
+      // Get real-time point count from the service instead of the user model
+      final points = await _loyaltyService.getUserPoints(user.id);
       
-      // Получаем историю транзакций
-      final transactions = await loyaltyService.getUserTransactions(user.id);
+      // Get transaction history
+      final transactions = await _loyaltyService.getUserTransactions(user.id);
       
-      // Получаем доступные акции
-      final promotions = await loyaltyService.getAvailablePromotions();
+      // Get available promotions
+      final promotions = await _loyaltyService.getAvailablePromotions();
+      
+      // Get redeemed promotions
+      final redeemed = await _loyaltyService.getUserRedeemedPromotions(user.id);
       
       if (mounted) {
         setState(() {
+          _loyaltyPoints = points;
           _transactions = transactions;
           _availablePromotions = promotions;
+          _redeemedPromotions = redeemed;
           _isLoading = false;
         });
       }
@@ -98,24 +106,28 @@ class _LoyaltyProgramScreenState extends State<LoyaltyProgramScreen> with Single
             tabs: [
               Tab(text: localizations.translate('points_history')),
               Tab(text: localizations.translate('available_promotions')),
+              Tab(text: localizations.translate('my_promotions')), // New tab
             ],
           ),
         ),
         body: Column(
           children: [
-            // Верхняя часть с информацией о баллах
+            // Points information card at the top
             _buildPointsInfo(context),
             
-            // Содержимое вкладок
+            // Tab content area
             Expanded(
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  // Вкладка с историей баллов
+                  // Points history tab
                   _buildPointsHistoryTab(context),
                   
-                  // Вкладка с доступными акциями
+                  // Available promotions tab
                   _buildPromotionsTab(context),
+                  
+                  // My redeemed promotions tab
+                  _buildRedeemedPromotionsTab(context),
                 ],
               ),
             ),
@@ -125,48 +137,57 @@ class _LoyaltyProgramScreenState extends State<LoyaltyProgramScreen> with Single
     );
   }
   
-  // Верхняя часть с информацией о баллах
+  // Points information card
   Widget _buildPointsInfo(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Theme.of(context).primaryColor,
+    return Card(
+      margin: const EdgeInsets.all(16),
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: Column(
-        children: [
-          Text(
-            localizations.translate('earned_points'),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  localizations.translate('earned_points'),
+                  style: const TextStyle(
+                    fontSize: 16,
+                  ),
+                ),
+                LoyaltyBadge(points: _loyaltyPoints),
+              ],
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _loyaltyPoints.toString(),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 40,
-              fontWeight: FontWeight.bold,
+            const SizedBox(height: 12),
+            Text(
+              _loyaltyPoints.toString(),
+              style: TextStyle(
+                color: Theme.of(context).primaryColor,
+                fontSize: 40,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _getPointsDescription(_loyaltyPoints),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
+            const SizedBox(height: 8),
+            Text(
+              localizations.translate('points_earning_rule'),
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+              textAlign: TextAlign.center,
             ),
-            textAlign: TextAlign.center,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
   
-  // Вкладка с историей баллов
+  // Points history tab
   Widget _buildPointsHistoryTab(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     
@@ -204,12 +225,12 @@ class _LoyaltyProgramScreenState extends State<LoyaltyProgramScreen> with Single
     );
   }
   
-  // Элемент истории транзакций
+  // Transaction item
   Widget _buildTransactionItem(BuildContext context, LoyaltyTransactionModel transaction) {
-    final dateFormat = DateFormat('dd.MM.yyyy');
+    final dateFormat = DateFormat('dd.MM.yyyy HH:mm');
     final formattedDate = dateFormat.format(transaction.date);
     
-    // Иконка и цвет в зависимости от типа транзакции
+    // Icon and color based on transaction type
     IconData icon;
     Color color;
     
@@ -253,7 +274,7 @@ class _LoyaltyProgramScreenState extends State<LoyaltyProgramScreen> with Single
     );
   }
   
-  // Вкладка с доступными акциями
+  // Available promotions tab
   Widget _buildPromotionsTab(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     
@@ -283,21 +304,56 @@ class _LoyaltyProgramScreenState extends State<LoyaltyProgramScreen> with Single
       itemCount: _availablePromotions.length,
       itemBuilder: (context, index) {
         final promotion = _availablePromotions[index];
-        return _buildPromotionItem(context, promotion);
+        return _buildPromotionItem(context, promotion, isRedeemed: false);
       },
     );
   }
   
-  // Элемент акции
-  Widget _buildPromotionItem(BuildContext context, Map<String, dynamic> promotion) {
+  // My redeemed promotions tab
+  Widget _buildRedeemedPromotionsTab(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    
+    if (_redeemedPromotions.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.card_giftcard,
+              size: 80,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              localizations.translate('no_redeemed_promotions'),
+              style: Theme.of(context).textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+    
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _redeemedPromotions.length,
+      itemBuilder: (context, index) {
+        final promotion = _redeemedPromotions[index];
+        return _buildPromotionItem(context, promotion, isRedeemed: true);
+      },
+    );
+  }
+  
+  // Promotion item card
+  Widget _buildPromotionItem(BuildContext context, Map<String, dynamic> promotion, {required bool isRedeemed}) {
     final localizations = AppLocalizations.of(context);
     final languageCode = Localizations.localeOf(context).languageCode;
     
-    // Получаем локализованное название и описание
+    // Get localized title and description
     final title = promotion['title'][languageCode] ?? promotion['title']['ru'] ?? '';
     final description = promotion['description'][languageCode] ?? promotion['description']['ru'] ?? '';
     
-    // Формируем дату окончания акции, если есть
+    // Format expiration date if available
     String validUntil = '';
     if (promotion['endDate'] != null) {
       final endDate = promotion['endDate'] is DateTime 
@@ -307,8 +363,25 @@ class _LoyaltyProgramScreenState extends State<LoyaltyProgramScreen> with Single
       validUntil = '${localizations.translate('valid_until')}: ${dateFormat.format(endDate)}';
     }
     
+    // Format redemption date for redeemed promotions
+    String redeemedDate = '';
+    if (isRedeemed && promotion['redeemedAt'] != null) {
+      final date = promotion['redeemedAt'] is DateTime 
+          ? promotion['redeemedAt'] 
+          : DateTime.fromMillisecondsSinceEpoch(promotion['redeemedAt']);
+      final dateFormat = DateFormat('dd.MM.yyyy');
+      redeemedDate = '${localizations.translate('redeemed_on')}: ${dateFormat.format(date)}';
+    }
+    
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: isRedeemed 
+            ? BorderSide(color: Theme.of(context).primaryColor, width: 2) 
+            : BorderSide.none,
+      ),
+      elevation: isRedeemed ? 4 : 2,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -317,14 +390,16 @@ class _LoyaltyProgramScreenState extends State<LoyaltyProgramScreen> with Single
             Row(
               children: [
                 Icon(
-                  Icons.local_offer,
-                  color: Theme.of(context).primaryColor,
+                  isRedeemed ? Icons.check_circle : Icons.local_offer,
+                  color: isRedeemed ? Colors.green : Theme.of(context).primaryColor,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     title,
-                    style: Theme.of(context).textTheme.titleMedium,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: isRedeemed ? Colors.green : null,
+                    ),
                   ),
                 ),
               ],
@@ -341,11 +416,23 @@ class _LoyaltyProgramScreenState extends State<LoyaltyProgramScreen> with Single
                 ),
               ),
             ],
+            if (redeemedDate.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                redeemedDate,
+                style: TextStyle(
+                  color: Colors.green,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
+            
+            // Bottom section with points and action button
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Стоимость в баллах
+                // Points cost
                 Row(
                   children: [
                     Icon(
@@ -363,17 +450,28 @@ class _LoyaltyProgramScreenState extends State<LoyaltyProgramScreen> with Single
                   ],
                 ),
                 
-                // Кнопка использования
-                ElevatedButton(
-                  onPressed: _loyaltyPoints >= (promotion['points'] ?? 0)
-                      ? () => _redeemPromotion(promotion)
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).primaryColor,
-                    foregroundColor: Colors.white,
+                // Action button (redeem or use)
+                if (!isRedeemed)
+                  ElevatedButton(
+                    onPressed: _loyaltyPoints >= (promotion['points'] ?? 0)
+                        ? () => _redeemPromotion(promotion)
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).primaryColor,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: Text(localizations.translate('redeem')),
+                  )
+                else
+                  ElevatedButton.icon(
+                    onPressed: () => _useRedeemedPromotion(promotion),
+                    icon: Icon(Icons.redeem),
+                    label: Text(localizations.translate('use_promotion')),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                    ),
                   ),
-                  child: Text(localizations.translate('redeem')),
-                ),
               ],
             ),
           ],
@@ -382,26 +480,11 @@ class _LoyaltyProgramScreenState extends State<LoyaltyProgramScreen> with Single
     );
   }
   
-  // Метод для получения текстового описания баллов
-  String _getPointsDescription(int points) {
-    final localizations = AppLocalizations.of(context);
-    
-    if (points < 100) {
-      return localizations.translate('loyalty_level_basic');
-    } else if (points < 300) {
-      return localizations.translate('loyalty_level_silver');
-    } else if (points < 1000) {
-      return localizations.translate('loyalty_level_gold');
-    } else {
-      return localizations.translate('loyalty_level_platinum');
-    }
-  }
-  
-  // Метод для использования акции
+  // Redeem a promotion
   Future<void> _redeemPromotion(Map<String, dynamic> promotion) async {
     final localizations = AppLocalizations.of(context);
     
-    // Проверяем, достаточно ли баллов
+    // Check if enough points
     if (_loyaltyPoints < (promotion['points'] ?? 0)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -412,7 +495,7 @@ class _LoyaltyProgramScreenState extends State<LoyaltyProgramScreen> with Single
       return;
     }
     
-    // Показываем диалог подтверждения
+    // Show confirmation dialog
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -443,23 +526,25 @@ class _LoyaltyProgramScreenState extends State<LoyaltyProgramScreen> with Single
     
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
-      final loyaltyService = LoyaltyService();
       
       final user = authService.currentUserModel;
       if (user == null) {
         throw Exception('User not authenticated');
       }
       
-      // Использовать акцию
-      final success = await loyaltyService.redeemPromotion(
+      // Redeem promotion
+      final success = await _loyaltyService.redeemPromotion(
         userId: user.id,
         promotionId: promotion['id'],
         points: promotion['points'] ?? 0,
       );
       
       if (success) {
-        // Обновляем данные
+        // Refresh data
         await _loadLoyaltyData();
+        
+        // Switch to "My Promotions" tab
+        _tabController.animateTo(2);
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -486,5 +571,81 @@ class _LoyaltyProgramScreenState extends State<LoyaltyProgramScreen> with Single
         );
       }
     }
+  }
+  
+  // Use a redeemed promotion
+  Future<void> _useRedeemedPromotion(Map<String, dynamic> promotion) async {
+    final localizations = AppLocalizations.of(context);
+    
+    // Generate QR code or barcode to show at salon
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(localizations.translate('use_promotion')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Promotion details
+            Text(
+              '${promotion['title'][Localizations.localeOf(context).languageCode] ?? promotion['title']['ru'] ?? ''}',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            
+            // Promotion code
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                border: Border.all(color: Theme.of(context).primaryColor),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                promotion['promoCode'] ?? promotion['id'].substring(0, 8).toUpperCase(),
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 2,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // Placeholder QR Code (in real app, generate actual QR code)
+            Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.qr_code_2,
+                  size: 160,
+                  color: Theme.of(context).primaryColor,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // Instructions
+            Text(
+              localizations.translate('show_to_salon_staff'),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(localizations.translate('close')),
+          ),
+        ],
+      ),
+    );
   }
 }
