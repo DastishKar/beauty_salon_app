@@ -29,6 +29,13 @@ class AppLocalizations {
       'loading': 'Загрузка...',
       'error': 'Ошибка',
       'success': 'Успешно',
+      'gallery': 'Галерея',
+      'camera': 'Камера',
+      'select_image_source': 'Выберите источник изображения',
+      'theme': 'Тема',
+      'light_theme': 'Светлая тема',
+      'dark_theme': 'Темная тема',
+      'system_theme': 'Системная тема',
       
       // Аутентификация
       'login': 'Вход',
@@ -253,6 +260,14 @@ class AppLocalizations {
       'clear': 'Тазалау',
       'notifications_cleared': 'Хабарландырулар тазаланды',
 
+      'gallery': 'Галерея',
+      'camera': 'Камера',
+      'select_image_source': 'Сурет көзін таңдаңыз',
+      'theme': 'Тақырып',
+      'light_theme': 'Жарық тақырып',
+      'dark_theme': 'Қараңғы тақырып',
+      'system_theme': 'Жүйелік тақырып',
+
 
 
     },
@@ -300,6 +315,14 @@ class AppLocalizations {
       'clear_notifications_confirmation': 'Are you sure you want to delete all notifications?',
       'clear': 'Clear',
       'notifications_cleared': 'Notifications cleared',
+
+      'gallery': 'Gallery',
+      'camera': 'Camera',
+      'select_image_source': 'Select image source',
+      'theme': 'Theme',
+      'light_theme': 'Light theme',
+      'dark_theme': 'Dark theme',
+      'system_theme': 'System theme'
     },
   };
 

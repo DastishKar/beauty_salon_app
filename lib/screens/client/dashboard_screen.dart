@@ -263,7 +263,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // Список мастеров
   Widget _buildMastersList() {
     return SizedBox(
-      height: 220, // Увеличенная высота для полного отображения карточек
+      height: 270, // Увеличенная высота для полного отображения карточек
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: _topMasters.length,

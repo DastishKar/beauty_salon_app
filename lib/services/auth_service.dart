@@ -22,6 +22,9 @@ class AuthService with ChangeNotifier {
   // Слушатель изменений состояния аутентификации
   Stream<User?> get authStateChanges => _auth.authStateChanges();
   
+  // Проверка, является ли пользователь администратором
+  bool get isAdmin => _currentUserModel?.role == 'admin';
+  
   // Инициализация при старте приложения
   Future<void> initialize() async {
     _auth.authStateChanges().listen((User? user) async {
@@ -136,6 +139,7 @@ class AuthService with ChangeNotifier {
     String? displayName,
     String? phoneNumber,
     String? language,
+    String? photoURL,
   }) async {
     if (_auth.currentUser == null || _currentUserModel == null) {
       throw 'Пользователь не авторизован';
@@ -147,11 +151,17 @@ class AuthService with ChangeNotifier {
         await _auth.currentUser!.updateDisplayName(displayName);
       }
       
+      // Обновление фото в Firebase Auth
+      if (photoURL != null) {
+        await _auth.currentUser!.updatePhotoURL(photoURL);
+      }
+      
       // Обновление данных в Firestore
       final Map<String, dynamic> updates = {};
       if (displayName != null) updates['displayName'] = displayName;
       if (phoneNumber != null) updates['phoneNumber'] = phoneNumber;
       if (language != null) updates['language'] = language;
+      if (photoURL != null) updates['photoURL'] = photoURL;
       
       await _firestore.collection('users')
           .doc(_auth.currentUser!.uid)
@@ -162,6 +172,7 @@ class AuthService with ChangeNotifier {
         displayName: displayName,
         phoneNumber: phoneNumber,
         language: language,
+        photoURL: photoURL,
       );
       
       notifyListeners();
@@ -199,6 +210,44 @@ class AuthService with ChangeNotifier {
         print('Ошибка при получении данных пользователя: $e');
       }
       throw 'Не удалось получить данные пользователя';
+    }
+  }
+  
+  // Повышение роли пользователя до администратора
+  Future<bool> promoteToAdmin(String userId) async {
+    if (!isAdmin) {
+      throw 'Недостаточно прав для выполнения этой операции';
+    }
+    
+    try {
+      await _firestore.collection('users').doc(userId).update({
+        'role': 'admin'
+      });
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Ошибка при повышении роли пользователя: $e');
+      }
+      return false;
+    }
+  }
+  
+  // Понижение роли администратора до клиента
+  Future<bool> demoteToClient(String userId) async {
+    if (!isAdmin) {
+      throw 'Недостаточно прав для выполнения этой операции';
+    }
+    
+    try {
+      await _firestore.collection('users').doc(userId).update({
+        'role': 'client'
+      });
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Ошибка при понижении роли пользователя: $e');
+      }
+      return false;
     }
   }
 }

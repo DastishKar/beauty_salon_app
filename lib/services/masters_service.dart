@@ -1,6 +1,9 @@
 // lib/services/masters_service.dart
 
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/master_model.dart';
@@ -268,5 +271,253 @@ class MastersService {
     }
     
     return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+  }
+
+  // Добавьте эти методы в класс MastersService в файле lib/services/masters_service.dart
+
+  // Создание нового мастера
+  Future<String?> createMaster({
+    required String displayName,
+    required String experience,
+    required Map<String, String> description,
+    required List<String> specializations,
+    File? photoFile,
+  }) async {
+    try {
+      // Создаем пользователя для мастера в auth
+      final String userId = 'master-${DateTime.now().millisecondsSinceEpoch}';
+      
+      // Загружаем фото, если оно есть
+      String? photoURL;
+      if (photoFile != null) {
+        photoURL = await _uploadMasterPhoto(photoFile, userId);
+      }
+      
+      // Создаем расписание по умолчанию (можно настроить позже)
+      final Map<String, DaySchedule> defaultSchedule = {
+        'monday': DaySchedule(start: '09:00', end: '18:00', breaks: [TimeBreak(start: '13:00', end: '14:00')]),
+        'tuesday': DaySchedule(start: '09:00', end: '18:00', breaks: [TimeBreak(start: '13:00', end: '14:00')]),
+        'wednesday': DaySchedule(start: '09:00', end: '18:00', breaks: [TimeBreak(start: '13:00', end: '14:00')]),
+        'thursday': DaySchedule(start: '09:00', end: '18:00', breaks: [TimeBreak(start: '13:00', end: '14:00')]),
+        'friday': DaySchedule(start: '09:00', end: '18:00', breaks: [TimeBreak(start: '13:00', end: '14:00')]),
+        'saturday': DaySchedule(start: '10:00', end: '16:00', breaks: []),
+      };
+      
+      // Создаем данные мастера
+      final masterData = {
+        'userId': userId,
+        'displayName': displayName,
+        'specializations': specializations,
+        'experience': experience,
+        'description': description,
+        'photoURL': photoURL,
+        'portfolio': [],
+        'schedule': _scheduleToMap(defaultSchedule),
+        'rating': 0.0,
+        'reviewsCount': 0,
+      };
+      
+      // Сохраняем в Firestore
+      final DocumentReference docRef = await _firestore
+          .collection('masters')
+          .add(masterData);
+      
+      return docRef.id;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Ошибка при создании мастера: $e');
+      }
+      return null;
+    }
+  }
+  
+  // Обновление данных мастера
+  Future<bool> updateMaster({
+    required String masterId,
+    required String displayName,
+    required String experience,
+    required Map<String, String> description,
+    required List<String> specializations,
+    File? photoFile,
+    String? currentPhotoURL,
+  }) async {
+    try {
+      // Получаем текущие данные мастера
+      final DocumentSnapshot doc = await _firestore
+          .collection('masters')
+          .doc(masterId)
+          .get();
+      
+      if (!doc.exists) {
+        throw Exception('Мастер не найден');
+      }
+      
+      final masterData = doc.data() as Map<String, dynamic>;
+      final String userId = masterData['userId'] as String;
+      
+      // Загружаем новое фото, если оно выбрано
+      String? photoURL = currentPhotoURL;
+      if (photoFile != null) {
+        photoURL = await _uploadMasterPhoto(photoFile, userId);
+      }
+      
+      // Обновляем данные мастера
+      await _firestore
+          .collection('masters')
+          .doc(masterId)
+          .update({
+            'displayName': displayName,
+            'specializations': specializations,
+            'experience': experience,
+            'description': description,
+            'photoURL': photoURL,
+          });
+      
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Ошибка при обновлении мастера: $e');
+      }
+      return false;
+    }
+  }
+  
+  // Удаление мастера
+  Future<bool> deleteMaster(String masterId) async {
+    try {
+      // Получаем данные мастера
+      final DocumentSnapshot doc = await _firestore
+          .collection('masters')
+          .doc(masterId)
+          .get();
+      
+      if (!doc.exists) {
+        throw Exception('Мастер не найден');
+      }
+      
+      // Удаляем мастера из Firestore
+      await _firestore
+          .collection('masters')
+          .doc(masterId)
+          .delete();
+      
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Ошибка при удалении мастера: $e');
+      }
+      return false;
+    }
+  }
+  
+  // Обновление портфолио мастера
+  Future<bool> updateMasterPortfolio(String masterId, List<File> photos) async {
+    try {
+      // Получаем текущие данные мастера
+      final DocumentSnapshot doc = await _firestore
+          .collection('masters')
+          .doc(masterId)
+          .get();
+      
+      if (!doc.exists) {
+        throw Exception('Мастер не найден');
+      }
+      
+      final masterData = doc.data() as Map<String, dynamic>;
+      final String userId = masterData['userId'] as String;
+      final List<String> currentPortfolio = List<String>.from(masterData['portfolio'] ?? []);
+      
+      // Загружаем новые фото
+      final List<String> newPhotos = [];
+      for (final file in photos) {
+        final photoURL = await _uploadPortfolioPhoto(file, userId);
+        if (photoURL != null) {
+          newPhotos.add(photoURL);
+        }
+      }
+      
+      // Объединяем с текущим портфолио
+      final List<String> updatedPortfolio = [...currentPortfolio, ...newPhotos];
+      
+      // Обновляем данные мастера
+      await _firestore
+          .collection('masters')
+          .doc(masterId)
+          .update({
+            'portfolio': updatedPortfolio,
+          });
+      
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Ошибка при обновлении портфолио: $e');
+      }
+      return false;
+    }
+  }
+  
+  // Загрузка фото мастера в Storage
+  Future<String?> _uploadMasterPhoto(File file, String userId) async {
+    try {
+      final String fileName = 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final Reference ref = FirebaseStorage.instance
+          .ref()
+          .child('masters')
+          .child(userId)
+          .child(fileName);
+      
+      final UploadTask uploadTask = ref.putFile(file);
+      final TaskSnapshot snapshot = await uploadTask;
+      final String downloadURL = await snapshot.ref.getDownloadURL();
+      
+      return downloadURL;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Ошибка при загрузке фото мастера: $e');
+      }
+      return null;
+    }
+  }
+  
+  // Загрузка фото для портфолио в Storage
+  Future<String?> _uploadPortfolioPhoto(File file, String userId) async {
+    try {
+      final String fileName = 'portfolio_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final Reference ref = FirebaseStorage.instance
+          .ref()
+          .child('masters')
+          .child(userId)
+          .child('portfolio')
+          .child(fileName);
+      
+      final UploadTask uploadTask = ref.putFile(file);
+      final TaskSnapshot snapshot = await uploadTask;
+      final String downloadURL = await snapshot.ref.getDownloadURL();
+      
+      return downloadURL;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Ошибка при загрузке фото для портфолио: $e');
+      }
+      return null;
+    }
+  }
+  
+  // Преобразование расписания в Map для сохранения в Firestore
+  Map<String, dynamic> _scheduleToMap(Map<String, DaySchedule> schedule) {
+    final Map<String, dynamic> result = {};
+    
+    schedule.forEach((day, daySchedule) {
+      result[day] = {
+        'start': daySchedule.start,
+        'end': daySchedule.end,
+        'breaks': daySchedule.breaks.map((breakTime) => {
+          'start': breakTime.start,
+          'end': breakTime.end,
+        }).toList(),
+      };
+    });
+    
+    return result;
   }
 }

@@ -1,13 +1,15 @@
-// lib/screens/client/edit_profile_screen.dart
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
+import 'package:image_cropper/image_cropper.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../services/auth_service.dart';
 import '../../services/language_service.dart';
+import '../../services/image_upload_service.dart';
 import '../../utils/validators.dart';
 import '../../widgets/loading_overlay.dart';
 
@@ -25,6 +27,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   File? _selectedImage;
   bool _isLoading = false;
   String _selectedLanguage = 'ru';
+  final ImageUploadService _imageUploadService = ImageUploadService();
 
   @override
   void initState() {
@@ -39,9 +42,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     
     final user = authService.currentUserModel;
     if (user != null) {
-      _nameController.text = user.displayName;
-      _phoneController.text = user.phoneNumber;
-      _selectedLanguage = languageService.languageCode;
+      setState(() {
+        _nameController.text = user.displayName;
+        _phoneController.text = user.phoneNumber;
+        _selectedLanguage = languageService.languageCode;
+      });
     }
   }
 
@@ -53,19 +58,148 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   // Выбор изображения из галереи
-  Future<void> _pickImage() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 800,
-      maxHeight: 800,
-    );
+  Future<void> _pickImageFromGallery() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 75,
+      );
 
-    if (image != null) {
-      setState(() {
-        _selectedImage = File(image.path);
-      });
+      if (image != null) {
+        setState(() {
+          _selectedImage = File(image.path);
+        });
+        
+        if (kDebugMode) {
+          print('Изображение выбрано из галереи: ${image.path}');
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Ошибка при выборе изображения из галереи: $e');
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка при выборе изображения: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
     }
+  }
+  
+  // Выбор изображения с камеры
+  Future<void> _pickImageFromCamera() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 75,
+      );
+
+      if (image != null) {
+        setState(() {
+          _selectedImage = File(image.path);
+        });
+        
+        if (kDebugMode) {
+          print('Изображение сделано камерой: ${image.path}');
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Ошибка при съемке фото: $e');
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка при съемке фото: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+  
+  // Обрезка изображения
+  Future<File?> _cropImage(File imageFile) async {
+    try {
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: imageFile.path,
+        compressQuality: 90,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Обрезка фото',
+            toolbarColor: Theme.of(context).primaryColor,
+            toolbarWidgetColor: Colors.white,
+            lockAspectRatio: true,
+          ),
+          IOSUiSettings(
+            title: 'Обрезка фото',
+          ),
+        ],
+      );
+      
+      if (croppedFile != null) {
+        if (kDebugMode) {
+          print('Изображение обрезано: ${croppedFile.path}');
+        }
+        return File(croppedFile.path);
+      }
+      return null;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Ошибка при обрезке изображения: $e');
+      }
+      return null;
+    }
+  }
+  
+  // Показать диалог выбора источника изображения
+  Future<void> _showImageSourceDialog() async {
+    final localizations = AppLocalizations.of(context);
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(localizations.translate('select_image_source')),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                GestureDetector(
+                  child: ListTile(
+                    leading: const Icon(Icons.photo_library),
+                    title: Text(localizations.translate('gallery')),
+                  ),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _pickImageFromGallery();
+                  },
+                ),
+                const Divider(),
+                GestureDetector(
+                  child: ListTile(
+                    leading: const Icon(Icons.photo_camera),
+                    title: Text(localizations.translate('camera')),
+                  ),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _pickImageFromCamera();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   // Сохранение изменений профиля
@@ -82,6 +216,57 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final authService = Provider.of<AuthService>(context, listen: false);
       final languageService = Provider.of<LanguageService>(context, listen: false);
       
+      // Получаем текущего пользователя
+      final currentUser = authService.currentUserModel;
+      if (currentUser == null) {
+        throw Exception('Пользователь не найден');
+      }
+      
+      // URL фото профиля
+      String? photoURL = currentUser.photoURL;
+      
+      // Загружаем новое фото, если оно выбрано
+      if (_selectedImage != null) {
+        try {
+          if (kDebugMode) {
+            print('Начинаем загрузку нового фото профиля');
+          }
+          
+          // Если старое фото существует, удаляем его
+          if (photoURL != null && photoURL.isNotEmpty) {
+            await _imageUploadService.deleteImage(photoURL);
+          }
+          
+          // Загружаем новое фото
+          photoURL = await _imageUploadService.uploadImage(
+            _selectedImage!, 
+            'users/${currentUser.id}/profile',
+          );
+          
+          if (kDebugMode) {
+            print('Новое фото профиля успешно загружено: $photoURL');
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            print('Ошибка при обработке изображения: $e');
+          }
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Ошибка при загрузке фото: $e'),
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
+            );
+            
+            setState(() {
+              _isLoading = false;
+            });
+          }
+          return; // Прерываем выполнение при ошибке загрузки фото
+        }
+      }
+      
       // Обновление языка
       if (languageService.languageCode != _selectedLanguage) {
         await languageService.setLanguage(_selectedLanguage);
@@ -92,28 +277,35 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         displayName: _nameController.text.trim(),
         phoneNumber: _phoneController.text.trim(),
         language: _selectedLanguage,
+        photoURL: photoURL,
       );
       
-      // TODO: Обновление фото профиля, если выбрано
+      if (kDebugMode) {
+        print('Профиль успешно обновлен');
+      }
       
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context).translate('profile_updated')),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.of(context).pop();
-      }
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context).translate('profile_updated')),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.of(context).pop();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
+      if (kDebugMode) {
+        print('Ошибка при сохранении изменений: $e');
       }
+      
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при обновлении профиля: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -149,7 +341,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               children: [
                 // Аватар пользователя
                 GestureDetector(
-                  onTap: _pickImage,
+                  onTap: _showImageSourceDialog,
                   child: Stack(
                     children: [
                       CircleAvatar(
@@ -157,10 +349,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         backgroundColor: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
                         backgroundImage: _selectedImage != null
                             ? FileImage(_selectedImage!)
-                            : (user.photoURL != null
+                            : (user.photoURL != null && user.photoURL!.isNotEmpty
                                 ? NetworkImage(user.photoURL!) as ImageProvider
                                 : null),
-                        child: _selectedImage == null && user.photoURL == null
+                        child: _selectedImage == null && (user.photoURL == null || user.photoURL!.isEmpty)
                             ? const Icon(Icons.person, size: 60, color: Colors.grey)
                             : null,
                       ),
@@ -174,7 +366,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
-                            Icons.edit,
+                            Icons.camera_alt,
                             color: Colors.white,
                             size: 20,
                           ),
@@ -239,9 +431,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 const SizedBox(height: 32),
                 
                 // Кнопка сохранения
-                ElevatedButton(
-                  onPressed: _saveChanges,
-                  child: Text(localizations.translate('save')),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _saveChanges,
+                    child: Text(localizations.translate('save')),
+                  ),
                 ),
               ],
             ),

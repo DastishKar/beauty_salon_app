@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'services/auth_service.dart';
 import 'services/language_service.dart';
+import 'services/theme_service.dart';
 import 'utils/app_theme.dart';
 import 'l10n/app_localizations.dart';
 import 'screens/splash_screen.dart';
@@ -33,6 +34,9 @@ void main() async {
         ChangeNotifierProvider<LanguageService>(
           create: (_) => LanguageService(prefs),
         ),
+        ChangeNotifierProvider<ThemeService>(
+          create: (_) => ThemeService(prefs),
+        ),
       ],
       child: const BeautySalonApp(),
     ),
@@ -45,12 +49,13 @@ class BeautySalonApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final languageService = Provider.of<LanguageService>(context);
+    final themeService = Provider.of<ThemeService>(context);
 
     return MaterialApp(
       title: 'Beauty Salon Astana',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
+      themeMode: themeService.themeMode,
       locale: languageService.locale,
       localizationsDelegates: const [
         AppLocalizations.delegate,

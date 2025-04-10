@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'dart:io';
 
 import '../../l10n/app_localizations.dart';
@@ -11,6 +12,7 @@ import '../../models/appointment_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/reviews_service.dart';
 import '../../services/appointments_service.dart';
+import '../../services/image_upload_service.dart';
 import '../../widgets/loading_overlay.dart';
 
 class CreateReviewScreen extends StatefulWidget {
@@ -33,6 +35,7 @@ class _CreateReviewScreenState extends State<CreateReviewScreen> {
   final ReviewsService _reviewsService = ReviewsService();
   final AppointmentsService _appointmentsService = AppointmentsService();
   final ImagePicker _imagePicker = ImagePicker();
+  final ImageUploadService _imageUploadService = ImageUploadService();
   
   bool _isLoading = false;
   double _rating = 5.0;
@@ -121,39 +124,142 @@ class _CreateReviewScreenState extends State<CreateReviewScreen> {
       );
     }
   }
+
   
-  // Выбор фотографии из галереи
-  Future<void> _pickImage() async {
+  
+  // Показать диалог выбора источника для фотографии
+  Future<void> _showImageSourceDialog() async {
+    final localizations = AppLocalizations.of(context);
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(localizations.translate('select_image_source')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: Text(localizations.translate('gallery')),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImagesFromGallery();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: Text(localizations.translate('camera')),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImageFromCamera();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  
+  
+  // Выбор фотографий из галереи
+  Future<void> _pickImagesFromGallery() async {
     try {
-      final pickedFiles = await _imagePicker.pickMultiImage();
+      final List<XFile> pickedFiles = await _imagePicker.pickMultiImage(
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 85,
+      );
       
-      if (pickedFiles.isEmpty) return;
+      // Если выбрано больше фотографий, чем осталось до лимита - предупреждаем
+      if (pickedFiles.length > 5 - _selectedPhotos.length) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(AppLocalizations.of(context).translate('max_photos_warning')),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
       
-      // Ограничиваем количество фотографий до 5
+      // Ограничиваем количество фотографий до лимита в 5
       final newPhotos = pickedFiles
-          .map<File>((file) => File(file.path))
           .take(5 - _selectedPhotos.length)
+          .map((file) => File(file.path))
           .toList();
       
       setState(() {
         _selectedPhotos.addAll(newPhotos);
       });
-      
-      // Показываем предупреждение, если пользователь выбрал больше 5 фотографий
-      if (pickedFiles.length > 5 - _selectedPhotos.length + newPhotos.length) {
-        if (!mounted) return;
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context).translate('max_photos_warning')),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
     } catch (e) {
       debugPrint('Ошибка при выборе фотографий: $e');
     }
   }
+  
+  // Выбор фотографии с камеры
+  Future<void> _pickImageFromCamera() async {
+    try {
+      // Проверка на лимит фотографий
+      if (_selectedPhotos.length >= 5) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(AppLocalizations.of(context).translate('max_photos_reached')),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+      
+      final XFile? pickedFile = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 85,
+      );
+      
+      if (pickedFile != null) {
+        // Добавляем файл без обрезки
+       setState(() {
+         _selectedPhotos.add(File(pickedFile.path));
+        });
+      }
+    } catch (e) {
+      debugPrint('Ошибка при съемке фотографии: $e');
+    }
+  }
+  
+  // Обрезка изображения
+  Future<void> _cropImage(File imageFile) async {
+    try {
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: imageFile.path,
+        compressQuality: 90,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Обрезка фото',
+            toolbarColor: Theme.of(context).primaryColor,
+            toolbarWidgetColor: Colors.white,
+            lockAspectRatio: false,
+          ),
+          IOSUiSettings(
+            title: 'Обрезка фото',
+          ),
+        ],
+      );
+      
+      if (croppedFile != null) {
+        setState(() {
+          _selectedPhotos.add(File(croppedFile.path));
+        });
+      }
+    } catch (e) {
+      debugPrint('Ошибка при обрезке изображения: $e');
+    }
+  }
+  
   
   // Удаление фотографии
   void _removePhoto(int index) {
@@ -186,6 +292,8 @@ class _CreateReviewScreenState extends State<CreateReviewScreen> {
     });
     
     try {
+      
+      // Создание отзыва с загруженными фотографиями
       final reviewId = await _reviewsService.createReview(
         clientId: currentUser.id,
         clientName: currentUser.displayName,
@@ -439,7 +547,7 @@ class _CreateReviewScreenState extends State<CreateReviewScreen> {
                     Positioned(
                       right: 8,
                       top: 0,
-                      child: InkWell(
+                      child: GestureDetector(
                         onTap: () => _removePhoto(index),
                         child: Container(
                           padding: const EdgeInsets.all(4),
@@ -465,7 +573,7 @@ class _CreateReviewScreenState extends State<CreateReviewScreen> {
         
         // Кнопка добавления фото
         OutlinedButton.icon(
-          onPressed: _selectedPhotos.length < 5 ? _pickImage : null,
+          onPressed: _selectedPhotos.length < 5 ? _showImageSourceDialog : null,
           icon: const Icon(Icons.photo_camera),
           label: Text(
             _selectedPhotos.length < 5

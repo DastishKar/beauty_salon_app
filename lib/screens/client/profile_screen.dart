@@ -1,15 +1,17 @@
 // lib/screens/client/profile_screen.dart
 
-import 'package:beauty_salon_app/screens/client/loyalty_program_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../services/auth_service.dart';
 import '../../services/language_service.dart';
+import '../../services/theme_service.dart';
 import '../../widgets/loading_overlay.dart';
+import '../../widgets/loyalty_badge.dart';
 import '../auth/login_screen.dart';
-import 'my_reviews_screen.dart'; // Импортируем экран моих отзывов
+import 'my_reviews_screen.dart';
+import 'loyalty_program_screen.dart';
 import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -57,7 +59,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // Изменение языка приложения
-  Future<void> _changeLanguage(BuildContext context) async {
+  Future<void> _changeLanguage() async {
     final languageService = Provider.of<LanguageService>(context, listen: false);
     final localizations = AppLocalizations.of(context);
     
@@ -131,11 +133,88 @@ class _ProfileScreenState extends State<ProfileScreen> {
       },
     );
   }
+  
+  // Изменение темы
+  Future<void> _changeTheme() async {
+    final themeService = Provider.of<ThemeService>(context, listen: false);
+    final localizations = AppLocalizations.of(context);
+    
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(localizations.translate('theme')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Светлая тема
+              ListTile(
+                title: Text(localizations.translate('light_theme')),
+                leading: Radio<ThemeMode>(
+                  value: ThemeMode.light,
+                  groupValue: themeService.themeMode,
+                  onChanged: (value) {
+                    if (value == ThemeMode.light) {
+                      themeService.setLightMode();
+                      Navigator.of(context).pop();
+                    }
+                  },
+                ),
+                onTap: () {
+                  themeService.setLightMode();
+                  Navigator.of(context).pop();
+                },
+              ),
+              
+              // Темная тема
+              ListTile(
+                title: Text(localizations.translate('dark_theme')),
+                leading: Radio<ThemeMode>(
+                  value: ThemeMode.dark,
+                  groupValue: themeService.themeMode,
+                  onChanged: (value) {
+                    if (value == ThemeMode.dark) {
+                      themeService.setDarkMode();
+                      Navigator.of(context).pop();
+                    }
+                  },
+                ),
+                onTap: () {
+                  themeService.setDarkMode();
+                  Navigator.of(context).pop();
+                },
+              ),
+              
+              // Системная тема
+              ListTile(
+                title: Text(localizations.translate('system_theme')),
+                leading: Radio<ThemeMode>(
+                  value: ThemeMode.system,
+                  groupValue: themeService.themeMode,
+                  onChanged: (value) {
+                    if (value == ThemeMode.system) {
+                      themeService.setSystemMode();
+                      Navigator.of(context).pop();
+                    }
+                  },
+                ),
+                onTap: () {
+                  themeService.setSystemMode();
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     final authService = Provider.of<AuthService>(context);
+    final themeService = Provider.of<ThemeService>(context);
     final user = authService.currentUserModel;
     
     return LoadingOverlay(
@@ -193,31 +272,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         const SizedBox(height: 16),
                         
-                        // Бонусные баллы
-                        Container(
-                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.star,
-                                color: Theme.of(context).primaryColor,
-                                size: 20,
+                        // Бонусные баллы и уровень лояльности
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // Бонусные баллы
+                            Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
+                                borderRadius: BorderRadius.circular(16),
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '${user?.loyaltyPoints ?? 0} ${localizations.loyaltyPoints}',
-                                style: TextStyle(
-                                  color: Theme.of(context).primaryColor,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.star,
+                                    color: Theme.of(context).primaryColor,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '${user?.loyaltyPoints ?? 0} ${localizations.loyaltyPoints}',
+                                    style: TextStyle(
+                                      color: Theme.of(context).primaryColor,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
+                            
+                            
+                          ],
                         ),
                         const SizedBox(height: 16),
                         
@@ -254,7 +341,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         const SizedBox(height: 16),
                         
-                        // Мои отзывы - добавляем новую опцию
+                        // Мои отзывы
                         ListTile(
                           leading: const Icon(Icons.rate_review),
                           title: Text(localizations.translate('my_reviews')),
@@ -269,7 +356,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         const Divider(),
                         
-                        // Моя программа лояльности
+                        // Программа лояльности
                         ListTile(
                           leading: const Icon(Icons.card_giftcard),
                           title: Text(localizations.translate('loyalty_program')),
@@ -280,7 +367,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 builder: (context) => const LoyaltyProgramScreen(),
                               ),
                             );
-                        
                           },
                         ),
                       ],
@@ -313,7 +399,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             Provider.of<LanguageService>(context).currentLanguageName,
                           ),
                           trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                          onTap: () => _changeLanguage(context),
+                          onTap: _changeLanguage,
                         ),
                         const Divider(),
                         
@@ -321,10 +407,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ListTile(
                           leading: const Icon(Icons.notifications),
                           title: Text(localizations.notifications),
-                          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                          onTap: () {
-                            // TODO: Реализовать экран настроек уведомлений
-                          },
+                          trailing: Switch(
+                            value: user?.notifications['push'] ?? false,
+                            onChanged: (value) {
+                              // TODO: Реализовать настройки уведомлений
+                            },
+                          ),
                         ),
                         const Divider(),
                         
@@ -332,11 +420,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ListTile(
                           leading: const Icon(Icons.dark_mode),
                           title: Text(localizations.darkMode),
-                          trailing: Switch(
-                            value: Theme.of(context).brightness == Brightness.dark,
-                            onChanged: (value) {
-                              // TODO: Реализовать переключение темы
-                            },
+                          subtitle: Text(_getThemeModeName(themeService.themeMode, localizations)),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.settings),
+                            onPressed: _changeTheme,
                           ),
                         ),
                       ],
@@ -361,5 +448,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     );
+  }
+  
+  // Получение названия режима темы
+  String _getThemeModeName(ThemeMode themeMode, AppLocalizations localizations) {
+    switch (themeMode) {
+      case ThemeMode.light:
+        return localizations.translate('light_theme');
+      case ThemeMode.dark:
+        return localizations.translate('dark_theme');
+      case ThemeMode.system:
+        return localizations.translate('system_theme');
+    }
   }
 }

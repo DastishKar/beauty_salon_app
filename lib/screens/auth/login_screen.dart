@@ -1,5 +1,6 @@
 // lib/screens/auth/login_screen.dart
 
+import 'package:beauty_salon_app/screens/admin/admin_home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -55,11 +56,16 @@ class _LoginScreenState extends State<LoginScreen> {
         _passwordController.text,
       );
       
-      // Переход на главный экран
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-        );
+        if (authService.isAdmin) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const AdminHomeScreen()),
+          );
+        } else {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          );
+        }
       }
     } catch (e) {
       // Показать сообщение об ошибке
