@@ -91,7 +91,6 @@ class AppointmentsService {
     try {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
-      final formattedToday = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
       
       // Запрос всех записей пользователя
       final QuerySnapshot snapshot = await _firestore

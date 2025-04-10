@@ -49,7 +49,13 @@ flutter {
 
 dependencies {
     // существующие зависимости
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:1.1.5")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:1.2.2")
+}
+
+buildscript {
+    dependencies {
+        classpath("com.android.tools.build:gradle:7.2.0") // или более новая версия
+    }
 }
 
 

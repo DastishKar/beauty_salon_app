@@ -1,5 +1,5 @@
 // lib/services/notifications_service.dart
-
+import 'package:beauty_salon_app/models/notification_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
@@ -7,7 +7,7 @@ class NotificationsService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   
   // Получение всех уведомлений пользователя
-  Future<List<Map<String, dynamic>>> getUserNotifications(String userId) async {
+  Future<List<NotificationModel>> getUserNotifications(String userId) async {
     try {
       final QuerySnapshot snapshot = await _firestore
           .collection('notifications')
@@ -16,9 +16,7 @@ class NotificationsService {
           .get();
       
       return snapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        data['id'] = doc.id;
-        return data;
+        return NotificationModel.fromMap(doc.id, doc.data() as Map<String, dynamic>);
       }).toList();
     } catch (e) {
       if (kDebugMode) {
@@ -29,7 +27,7 @@ class NotificationsService {
   }
   
   // Получение непрочитанных уведомлений пользователя
-  Future<List<Map<String, dynamic>>> getUnreadNotifications(String userId) async {
+  Future<List<NotificationModel>> getUnreadNotifications(String userId) async {
     try {
       final QuerySnapshot snapshot = await _firestore
           .collection('notifications')
@@ -39,9 +37,7 @@ class NotificationsService {
           .get();
       
       return snapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        data['id'] = doc.id;
-        return data;
+        return NotificationModel.fromMap(doc.id, doc.data() as Map<String, dynamic>);
       }).toList();
     } catch (e) {
       if (kDebugMode) {
@@ -57,6 +53,9 @@ class NotificationsService {
     required String title,
     required String message,
     String? appointmentId,
+    String? imageUrl,
+    String? actionType,
+    Map<String, dynamic>? actionData,
   }) async {
     try {
       final docRef = await _firestore.collection('notifications').add({
@@ -66,6 +65,9 @@ class NotificationsService {
         'appointmentId': appointmentId,
         'read': false,
         'createdAt': FieldValue.serverTimestamp(),
+        'imageUrl': imageUrl,
+        'actionType': actionType,
+        'actionData': actionData,
       });
       
       return docRef.id;

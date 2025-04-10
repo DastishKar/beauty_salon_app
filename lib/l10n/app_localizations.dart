@@ -53,6 +53,20 @@ class AppLocalizations {
       'services': 'Услуги',
       'appointments': 'Записи',
       'profile': 'Профиль',
+
+      // Существующие строки...
+      'view_all': 'Смотреть все',
+      'dashboard_tagline': 'Преобразите себя с нами',
+      'good_morning': 'Доброе утро',
+      'good_afternoon': 'Добрый день',
+      'good_evening': 'Добрый вечер',
+      'good_night': 'Доброй ночи',
+      'top_masters': 'Топ мастеров',
+      'no_notifications': 'У вас нет уведомлений',
+      'clear_all_notifications': 'Очистить все уведомления',
+      'clear_notifications_confirmation': 'Вы уверены, что хотите удалить все уведомления?',
+      'clear': 'Очистить',
+      'notifications_cleared': 'Уведомления очищены',
       
       // Услуги
       'all_services': 'Все услуги',
@@ -224,6 +238,23 @@ class AppLocalizations {
       'loyalty_level_platinum': 'Платина деңгейі (15% жеңілдік)',
       'earn_points_hint': 'Әр жазбамен ұпай жинап, оларды жеңілдіктер мен арнайы ұсыныстарға айырбастаңыз',
       'points_earning_rule': 'Сіз тапсырысыңыздағы әрбір 100 теңге үшін 1 ұпай аласыз',
+
+      // Существующие строки...
+      'view_all': 'Барлығын көру',
+      'dashboard_tagline': 'Өзіңізді бізбен өзгертіңіз',
+      'good_morning': 'Қайырлы таң',
+      'good_afternoon': 'Қайырлы күн',
+      'good_evening': 'Қайырлы кеш',
+      'good_night': 'Қайырлы түн',
+      'top_masters': 'Үздік шеберлер',
+      'no_notifications': 'Сізде хабарландырулар жоқ',
+      'clear_all_notifications': 'Барлық хабарландыруларды тазалау',
+      'clear_notifications_confirmation': 'Барлық хабарландыруларды өшіргіңіз келетініне сенімдісіз бе?',
+      'clear': 'Тазалау',
+      'notifications_cleared': 'Хабарландырулар тазаланды',
+
+
+
     },
     
     // Для английского языка
@@ -256,7 +287,19 @@ class AppLocalizations {
       'loyalty_level_gold': 'Gold Level (10% Discount)',
       'loyalty_level_platinum': 'Platinum Level (15% Discount)',
       'earn_points_hint': 'Earn points with each appointment and exchange them for discounts and special offers',
-      'points_earning_rule': 'You earn 1 point for every 100 tenge in your order'
+      'points_earning_rule': 'You earn 1 point for every 100 tenge in your order',
+      'view_all': 'View All',
+      'dashboard_tagline': 'Transform yourself with us',
+      'good_morning': 'Good Morning',
+      'good_afternoon': 'Good Afternoon',
+      'good_evening': 'Good Evening',
+      'good_night': 'Good Night',
+      'top_masters': 'Top Masters',
+      'no_notifications': 'You have no notifications',
+      'clear_all_notifications': 'Clear all notifications',
+      'clear_notifications_confirmation': 'Are you sure you want to delete all notifications?',
+      'clear': 'Clear',
+      'notifications_cleared': 'Notifications cleared',
     },
   };
 

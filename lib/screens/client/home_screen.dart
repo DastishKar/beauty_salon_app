@@ -24,6 +24,7 @@ class HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   late PageController _pageController;
   bool _needRefreshAppointments = false; // Флаг для обновления списка записей
+  final int _unreadNotificationsCount = 0;
 
   @override
   void initState() {
@@ -72,12 +73,12 @@ class HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     Provider.of<AuthService>(context);
-    
+  
     return Scaffold(
       body: PageView(
         controller: _pageController,
         onPageChanged: _onPageChanged,
-        physics: const NeverScrollableScrollPhysics(), // Отключаем свайп для избежания конфликтов
+        physics: const NeverScrollableScrollPhysics(),
         children: [
           const DashboardScreen(),
           const ServicesScreen(),
@@ -100,15 +101,43 @@ class HomeScreenState extends State<HomeScreen> {
             label: localizations.services,
           ),
           BottomNavigationBarItem(
-          icon: const Icon(Icons.people), // Иконка для мастеров
-          label: localizations.masters, // Используем геттер
+            icon: const Icon(Icons.people),
+            label: localizations.masters,
           ),
           BottomNavigationBarItem(
             icon: const Icon(Icons.calendar_today),
             label: localizations.appointments,
-          ),
+         ),
           BottomNavigationBarItem(
-            icon: const Icon(Icons.person),
+            icon: Stack(
+              children: [
+                const Icon(Icons.person),
+                if (_unreadNotificationsCount > 0)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(1),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 12,
+                        minHeight: 12,
+                      ),
+                      child: Text(
+                        _unreadNotificationsCount > 9 ? '9+' : '$_unreadNotificationsCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             label: localizations.profile,
           ),
         ],

@@ -36,7 +36,7 @@ class _CreateReviewScreenState extends State<CreateReviewScreen> {
   
   bool _isLoading = false;
   double _rating = 5.0;
-  List<File> _selectedPhotos = [];
+  final List<File> _selectedPhotos = [];
   List<AppointmentModel> _completedAppointments = [];
   AppointmentModel? _selectedAppointment;
   

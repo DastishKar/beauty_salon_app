@@ -7,7 +7,6 @@ import '../../l10n/app_localizations.dart';
 import '../../models/master_model.dart';
 import '../../models/service_model.dart';
 import '../../services/language_service.dart';
-import '../../services/masters_service.dart';
 import '../../services/services_service.dart';
 import '../../widgets/service_card.dart';
 import 'booking_screen.dart';
