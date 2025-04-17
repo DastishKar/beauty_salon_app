@@ -342,32 +342,47 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
                 // Кнопки в зависимости от статуса
                 if (appointment.status == 'booked') ...[
                   // Кнопка отметки как "Завершено"
-                  OutlinedButton(
+                  IconButton(
                     onPressed: () => _changeAppointmentStatus(appointment, 'completed'),
-                    style: OutlinedButton.styleFrom(
+                    icon: const Icon(Icons.check_circle_outline),
+                    style: IconButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(color: Colors.green),
+                      ),
+                      padding: const EdgeInsets.all(12),
                       foregroundColor: Colors.green,
                     ),
-                    child: const Text('Завершено'),
                   ),
                   const SizedBox(width: 8),
                   
                   // Кнопка отметки как "Неявка"
-                  OutlinedButton(
+                  IconButton(
                     onPressed: () => _changeAppointmentStatus(appointment, 'no-show'),
-                    style: OutlinedButton.styleFrom(
+                    icon: const Icon(Icons.person_off_outlined),
+                    style: IconButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(color: Colors.orange),
+                      ),
+                      padding: const EdgeInsets.all(12),
                       foregroundColor: Colors.orange,
                     ),
-                    child: const Text('Неявка'),
                   ),
                   const SizedBox(width: 8),
                   
                   // Кнопка отмены
-                  OutlinedButton(
+                  IconButton(
                     onPressed: () => _cancelAppointment(appointment),
-                    style: OutlinedButton.styleFrom(
+                    icon: const Icon(Icons.cancel_outlined),
+                    style: IconButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(color: Colors.red),
+                      ),
+                      padding: const EdgeInsets.all(12),
                       foregroundColor: Colors.red,
                     ),
-                    child: const Text('Отменить'),
                   ),
                 ],
               ],

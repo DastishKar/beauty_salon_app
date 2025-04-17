@@ -1,7 +1,9 @@
 // lib/widgets/review_card.dart
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert';
 import '../models/review_model.dart';
 
 class ReviewCard extends StatelessWidget {
@@ -37,16 +39,39 @@ class ReviewCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Аватар клиента
+                // Аватар клиента с обработкой base64 изображения
                 CircleAvatar(
                   radius: 20,
                   backgroundColor: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
-                  backgroundImage: review.clientPhotoURL != null
-                      ? NetworkImage(review.clientPhotoURL!)
-                      : null,
-                  child: review.clientPhotoURL == null
-                      ? const Icon(Icons.person, size: 20, color: Colors.grey)
-                      : null,
+                  child: Builder(
+                    builder: (context) {
+                      if (review.clientPhotoBase64 == null || review.clientPhotoBase64!.isEmpty) {
+                        return const Icon(Icons.person, size: 20, color: Colors.grey);
+                      }
+
+                      try {
+                        return ClipOval(
+                          child: Image.memory(
+                            base64Decode(review.clientPhotoBase64!),
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              if (kDebugMode) {
+                                print('Error loading avatar: $error');
+                              }
+                              return const Icon(Icons.person, size: 20, color: Colors.grey);
+                            },
+                          ),
+                        );
+                      } catch (e) {
+                        if (kDebugMode) {
+                          print('Error decoding avatar: $e');
+                        }
+                        return const Icon(Icons.person, size: 20, color: Colors.grey);
+                      }
+                    },
+                  ),
                 ),
                 const SizedBox(width: 12),
                 
@@ -124,15 +149,16 @@ class ReviewCard extends StatelessWidget {
               Text(review.comment),
             ],
             
-            // Фотографии (если есть)
-            if (review.photoURLs.isNotEmpty) ...[
+            // Фотографии с обработкой base64 (если есть)
+            if (review.photosBase64.isNotEmpty) ...[
               const SizedBox(height: 12),
               SizedBox(
                 height: 80,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
-                  itemCount: review.photoURLs.length,
+                  itemCount: review.photosBase64.length,
                   itemBuilder: (context, index) {
+                    final photoBase64 = review.photosBase64[index];
                     return GestureDetector(
                       onTap: () {
                         // Показ фото на весь экран при нажатии
@@ -146,9 +172,20 @@ class ReviewCard extends StatelessWidget {
                                   boundaryMargin: const EdgeInsets.all(20),
                                   minScale: 0.5,
                                   maxScale: 4,
-                                  child: Image.network(
-                                    review.photoURLs[index],
-                                    fit: BoxFit.contain,
+                                  child: Builder(
+                                    builder: (context) {
+                                      try {
+                                        return Image.memory(
+                                          base64Decode(photoBase64),
+                                          fit: BoxFit.contain,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            return const Icon(Icons.broken_image, size: 50, color: Colors.red);
+                                          },
+                                        );
+                                      } catch (e) {
+                                        return const Icon(Icons.error_outline, size: 50, color: Colors.red);
+                                      }
+                                    },
                                   ),
                                 ),
                               ),
@@ -162,10 +199,29 @@ class ReviewCard extends StatelessWidget {
                         margin: const EdgeInsets.only(right: 8),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(8),
-                          image: DecorationImage(
-                            image: NetworkImage(review.photoURLs[index]),
-                            fit: BoxFit.cover,
-                          ),
+                          color: Colors.grey[200],
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Builder(
+                          builder: (context) {
+                            try {
+                              return Image.memory(
+                                base64Decode(photoBase64),
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  if (kDebugMode) {
+                                    print('Error loading review photo: $error');
+                                  }
+                                  return const Icon(Icons.broken_image, size: 30, color: Colors.red);
+                                },
+                              );
+                            } catch (e) {
+                              if (kDebugMode) {
+                                print('Error decoding review photo: $e');
+                              }
+                              return const Icon(Icons.error_outline, size: 30, color: Colors.red);
+                            }
+                          },
                         ),
                       ),
                     );

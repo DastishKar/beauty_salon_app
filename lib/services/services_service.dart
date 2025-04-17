@@ -3,6 +3,7 @@
 import 'dart:io';
 
 import 'package:beauty_salon_app/models/appointment_model.dart';
+import 'package:beauty_salon_app/services/image_upload_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
@@ -13,6 +14,7 @@ import '../models/category_model.dart';
 
 class ServicesService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final ImageUploadService _imageUploadService = ImageUploadService();
   
   // Получение всех категорий
   Future<List<CategoryModel>> getCategories() async {
@@ -203,18 +205,13 @@ class ServicesService {
     required int duration,
     required bool isActive,
     File? photoFile,
-    String? currentPhotoURL,
+    String? currentPhotoBase64,
   }) async {
     try {
       // Загружаем новое фото, если оно выбрано
-      String? photoURL = currentPhotoURL;
+      String? photoBase64 = currentPhotoBase64;
       if (photoFile != null) {
-        photoURL = await _uploadServicePhoto(photoFile);
-      
-        // Если есть новое фото и было старое, удаляем старое фото из Storage
-        if (currentPhotoURL != null && currentPhotoURL.isNotEmpty) {
-          await _deleteServicePhoto(currentPhotoURL);
-        }
+        photoBase64 = await _imageUploadService.uploadImage(photoFile, 'services');
       }
     
       // Обновляем данные услуги
@@ -227,9 +224,9 @@ class ServicesService {
         'isActive': isActive,
       };
     
-      // Добавляем photoURL только если он не null
-      if (photoURL != null) {
-        updateData['photoURL'] = photoURL;
+      // Добавляем photoBase64 только если он не null
+      if (photoBase64 != null) {
+        updateData['photoBase64'] = photoBase64;
       }
     
       // Обновляем документ в Firestore
@@ -247,71 +244,9 @@ class ServicesService {
     }
   }
 
-  // Загрузка фото услуги в Firebase Storage
-  Future<String?> _uploadServicePhoto(File photoFile) async {
-    try {
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${path.basename(photoFile.path)}';
-      final storageRef = FirebaseStorage.instance.ref().child('services/$fileName');
-    
-      // Загружаем файл
-      final uploadTask = storageRef.putFile(photoFile);
-      final snapshot = await uploadTask;
-      
-      // Получаем URL загруженного файла
-      final downloadURL = await snapshot.ref.getDownloadURL();
-      return downloadURL;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка при загрузке фото услуги: $e');
-      }
-      return null;
-    }
-  }
-
-  // Удаление фото услуги из Firebase Storage
-  Future<bool> _deleteServicePhoto(String photoURL) async {
-    try {
-      // Извлекаем путь к файлу из URL
-      final uri = Uri.parse(photoURL);
-      final pathSegments = uri.pathSegments;
-    
-      // Находим ссылку на файл
-      if (pathSegments.length > 1) {
-        final filePath = pathSegments.sublist(1).join('/');
-        final fileRef = FirebaseStorage.instance.ref().child(filePath);
-      
-        // Удаляем файл
-        await fileRef.delete();
-        return true;
-      }
-      return false;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка при удалении фото услуги: $e');
-      }
-      return false;
-    }
-  }
-
   // Удаление услуги
   Future<bool> deleteService(String serviceId) async {
     try {
-      // Получаем данные услуги, чтобы удалить фото, если оно есть
-      final DocumentSnapshot doc = await _firestore
-          .collection('services')
-          .doc(serviceId)
-          .get();
-      
-      if (doc.exists) {
-       final data = doc.data() as Map<String, dynamic>;
-        final photoURL = data['photoURL'] as String?;
-      
-        // Удаляем фото из Storage, если оно есть
-        if (photoURL != null && photoURL.isNotEmpty) {
-          await _deleteServicePhoto(photoURL);
-        }
-      }
-    
       // Удаляем документ из Firestore
       await _firestore
           .collection('services')
@@ -340,9 +275,9 @@ class ServicesService {
   }) async {
     try {
       // Upload photo if provided
-      String? photoURL;
+      String? photoBase64;
       if (photoFile != null) {
-        photoURL = await _uploadServicePhoto(photoFile);
+        photoBase64 = await _imageUploadService.uploadImage(photoFile, 'services');
       }
       
       // Create service data
@@ -352,7 +287,7 @@ class ServicesService {
         'category': category,
         'price': price,
         'duration': duration,
-        'photoURL': photoURL,
+        'photoBase64': photoBase64,
         'availableMasters': {},
         'isActive': isActive,
       };
@@ -373,44 +308,24 @@ class ServicesService {
   
   
   // Method to update service photo
-  Future<String?> updateServicePhoto(String serviceId, File photoFile) async {
+  Future<bool> updateServicePhoto(String serviceId, File photoFile) async {
     try {
-      // Get current service data to check for existing photo
-      final DocumentSnapshot doc = await _firestore
+      final imageUploadService = ImageUploadService();
+      final base64String = await imageUploadService.uploadImage(photoFile, 'services');
+      
+      await _firestore
           .collection('services')
           .doc(serviceId)
-          .get();
-    
-      if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>;
-        final currentPhotoURL = data['photoURL'] as String?;
-        
-        // If there's an existing photo, delete it
-        if (currentPhotoURL != null && currentPhotoURL.isNotEmpty) {
-          await _deleteServicePhoto(currentPhotoURL);
-        }
-      }
+          .update({
+            'photoBase64': base64String,
+          });
       
-      // Upload new photo
-      final newPhotoURL = await _uploadServicePhoto(photoFile);
-      
-      if (newPhotoURL != null) {
-        // Update service document with new photo URL
-        await _firestore
-            .collection('services')
-            .doc(serviceId)
-            .update({'photoURL': newPhotoURL});
-      }
-      
-      return newPhotoURL;
+      return true;
     } catch (e) {
       if (kDebugMode) {
         print('Error updating service photo: $e');
       }
-      return null;
+      return false;
     }
   }
-
-
-
 }

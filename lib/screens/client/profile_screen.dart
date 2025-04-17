@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:convert';
 
 import '../../l10n/app_localizations.dart';
 import '../../services/auth_service.dart';
@@ -242,10 +243,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         CircleAvatar(
                           radius: 50,
                           backgroundColor: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
-                          backgroundImage: user?.photoURL != null
-                              ? NetworkImage(user!.photoURL!)
+                          backgroundImage: user?.photoBase64 != null
+                              ? MemoryImage(base64Decode(user!.photoBase64!))
                               : null,
-                          child: user?.photoURL == null
+                          child: user?.photoBase64 == null
                               ? const Icon(Icons.person, size: 50, color: Colors.grey)
                               : null,
                         ),

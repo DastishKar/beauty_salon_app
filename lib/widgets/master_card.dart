@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:convert';
 
 import '../l10n/app_localizations.dart';
 import '../models/master_model.dart';
@@ -11,23 +12,53 @@ class MasterCard extends StatelessWidget {
   final MasterModel master;
   final VoidCallback? onTap;
   final bool isSmall;
-  
+
   const MasterCard({
     super.key,
     required this.master,
     this.onTap,
     this.isSmall = false,
   });
-  
+
+  Widget _buildPhoto(BuildContext context, {required double size, double iconSize = 50}) {
+    Widget photoWidget;
+    try {
+      if (master.photoBase64 != null && master.photoBase64!.isNotEmpty) {
+        photoWidget = Image.memory(
+          base64Decode(master.photoBase64!),
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Icon(Icons.person, size: iconSize, color: Colors.grey);
+          },
+        );
+      } else {
+        photoWidget = Icon(Icons.person, size: iconSize, color: Colors.grey);
+      }
+    } catch (e) {
+      photoWidget = Icon(Icons.person, size: iconSize, color: Colors.grey);
+    }
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.grey[200],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: photoWidget,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final languageCode = Provider.of<LanguageService>(context).languageCode;
     AppLocalizations.of(context);
-    
+
     if (isSmall) {
       return _buildSmallCard(context, languageCode);
     }
-    
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
@@ -40,19 +71,9 @@ class MasterCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              // Фото мастера
-              CircleAvatar(
-                radius: 50,
-                backgroundColor: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
-                backgroundImage: master.photoURL != null
-                    ? NetworkImage(master.photoURL!)
-                    : null,
-                child: master.photoURL == null
-                    ? const Icon(Icons.person, size: 50, color: Colors.grey)
-                    : null,
-              ),
+              _buildPhoto(context, size: 100),
               const SizedBox(height: 12),
-              
+
               // Имя мастера
               Text(
                 master.displayName,
@@ -60,7 +81,7 @@ class MasterCard extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 4),
-              
+
               // Специализации
               Text(
                 master.specializations.join(', '),
@@ -70,7 +91,7 @@ class MasterCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 8),
-              
+
               // Рейтинг
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -100,7 +121,7 @@ class MasterCard extends StatelessWidget {
       ),
     );
   }
-  
+
   // Компактная версия карточки
   Widget _buildSmallCard(BuildContext context, String languageCode) {
     return Card(
@@ -115,19 +136,9 @@ class MasterCard extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              // Фото мастера
-              CircleAvatar(
-                radius: 30,
-                backgroundColor: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
-                backgroundImage: master.photoURL != null
-                    ? NetworkImage(master.photoURL!)
-                    : null,
-                child: master.photoURL == null
-                    ? const Icon(Icons.person, size: 30, color: Colors.grey)
-                    : null,
-              ),
+              _buildPhoto(context, size: 60, iconSize: 30),
               const SizedBox(width: 12),
-              
+
               // Информация о мастере
               Expanded(
                 child: Column(

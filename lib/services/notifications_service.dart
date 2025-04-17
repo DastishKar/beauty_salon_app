@@ -204,4 +204,45 @@ class NotificationsService {
       return 0;
     }
   }
+
+  // Send push notification
+  Future<bool> sendPushNotification({
+    required String userId,
+    required String title,
+    required String message,
+    Map<String, dynamic>? data,
+  }) async {
+    try {
+      // Get user's FCM tokens
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final tokens = List<String>.from(userDoc.data()?['fcmTokens'] ?? []);
+
+      if (tokens.isEmpty) return false;
+
+      // Prepare notification payload
+      final payload = {
+        'notification': {
+          'title': title,
+          'body': message,
+          'sound': 'default',
+        },
+        'data': data ?? {},
+        'registration_ids': tokens,
+      };
+
+      // Send to Firebase Cloud Messaging via Cloud Functions
+      await _firestore.collection('notifications_queue').add({
+        'payload': payload,
+        'timestamp': FieldValue.serverTimestamp(),
+        'userId': userId,
+      });
+
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error sending push notification: $e');
+      }
+      return false;
+    }
+  }
 }

@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:convert';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/master_model.dart';
@@ -214,10 +215,10 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
           CircleAvatar(
             radius: 30,
             backgroundColor: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
-            backgroundImage: widget.master.photoURL != null
-                ? NetworkImage(widget.master.photoURL!)
+            backgroundImage: widget.master.photoBase64 != null
+                ? MemoryImage(base64Decode(widget.master.photoBase64!))
                 : null,
-            child: widget.master.photoURL == null
+            child: widget.master.photoBase64 == null
                 ? const Icon(Icons.person, size: 30, color: Colors.grey)
                 : null,
           ),

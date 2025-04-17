@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'dart:io';
+import 'dart:convert';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/master_model.dart';
@@ -297,7 +298,7 @@ class _CreateReviewScreenState extends State<CreateReviewScreen> {
       final reviewId = await _reviewsService.createReview(
         clientId: currentUser.id,
         clientName: currentUser.displayName,
-        clientPhotoURL: currentUser.photoURL,
+        clientPhotoBase64: currentUser.photoBase64, // Changed from clientPhotoURL
         masterId: widget.master.id,
         appointmentId: _selectedAppointment?.id,
         rating: _rating,
@@ -434,10 +435,10 @@ class _CreateReviewScreenState extends State<CreateReviewScreen> {
         CircleAvatar(
           radius: 30,
           backgroundColor: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
-          backgroundImage: widget.master.photoURL != null
-              ? NetworkImage(widget.master.photoURL!)
+          backgroundImage: widget.master.photoBase64 != null
+              ? MemoryImage(base64Decode(widget.master.photoBase64!))
               : null,
-          child: widget.master.photoURL == null
+          child: widget.master.photoBase64 == null
               ? const Icon(Icons.person, size: 30, color: Colors.grey)
               : null,
         ),

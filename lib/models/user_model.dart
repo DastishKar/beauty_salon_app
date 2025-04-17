@@ -5,7 +5,7 @@ class UserModel {
   final String displayName;
   final String email;
   final String phoneNumber;
-  final String? photoURL;
+  final String? photoBase64; // Changed from photoURL
   final String role; // 'client', 'admin', 'master'
   final String language; // 'ru', 'kk', 'en'
   final DateTime createdAt;
@@ -18,7 +18,7 @@ class UserModel {
     required this.displayName,
     required this.email,
     required this.phoneNumber,
-    this.photoURL,
+    this.photoBase64, // Changed from photoURL
     required this.role,
     required this.language,
     required this.createdAt,
@@ -35,7 +35,7 @@ class UserModel {
       displayName: data['displayName'] ?? '',
       email: data['email'] ?? '',
       phoneNumber: data['phoneNumber'] ?? '',
-      photoURL: data['photoURL'],
+      photoBase64: data['photoBase64'] as String?, // Changed from photoURL
       role: data['role'] ?? 'client',
       language: data['language'] ?? 'ru',
       createdAt: data['createdAt'] != null 
@@ -52,7 +52,7 @@ class UserModel {
       'displayName': displayName,
       'email': email,
       'phoneNumber': phoneNumber,
-      'photoURL': photoURL,
+      'photoBase64': photoBase64, // Changed from photoURL
       'role': role,
       'language': language,
       'createdAt': createdAt.millisecondsSinceEpoch,
@@ -66,7 +66,7 @@ class UserModel {
     String? displayName,
     String? email,
     String? phoneNumber,
-    String? photoURL,
+    String? photoBase64, // Changed from photoURL
     String? role,
     String? language,
     int? loyaltyPoints,
@@ -78,7 +78,7 @@ class UserModel {
       displayName: displayName ?? this.displayName,
       email: email ?? this.email,
       phoneNumber: phoneNumber ?? this.phoneNumber,
-      photoURL: photoURL ?? this.photoURL,
+      photoBase64: photoBase64 ?? this.photoBase64, // Changed from photoURL
       role: role ?? this.role,
       language: language ?? this.language,
       createdAt: createdAt,

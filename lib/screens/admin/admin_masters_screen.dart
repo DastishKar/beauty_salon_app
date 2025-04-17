@@ -1,8 +1,10 @@
 // lib/screens/admin/admin_masters_screen.dart
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:convert';
 
 import '../../models/master_model.dart';
 import '../../services/masters_service.dart';
@@ -243,23 +245,41 @@ class _AdminMastersScreenState extends State<AdminMastersScreen> {
             // Фото и имя мастера
             Row(
               children: [
-                // Фото мастера
+                // Фото мастера с обработкой ошибок
                 Container(
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: Colors.grey[200],
-                    image: master.photoURL != null
-                        ? DecorationImage(
-                            image: NetworkImage(master.photoURL!),
-                            fit: BoxFit.cover,
-                          )
-                        : null,
                   ),
-                  child: master.photoURL == null
-                      ? const Icon(Icons.person, size: 40, color: Colors.grey)
-                      : null,
+                  clipBehavior: Clip.antiAlias,
+                  child: Builder(
+                    builder: (context) {
+                      if (master.photoBase64 == null || master.photoBase64!.isEmpty) {
+                        return const Icon(Icons.person, size: 40, color: Colors.grey);
+                      }
+
+                      try {
+                        return Image.memory(
+                          base64Decode(master.photoBase64!),
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            if (kDebugMode) {
+                              print('Error loading master photo: $error');
+                              print('Stack trace: $stackTrace');
+                            }
+                            return const Icon(Icons.error_outline, size: 40, color: Colors.red);
+                          },
+                        );
+                      } catch (e) {
+                        if (kDebugMode) {
+                          print('Error decoding master photo: $e');
+                        }
+                        return const Icon(Icons.broken_image, size: 40, color: Colors.red);
+                      }
+                    },
+                  ),
                 ),
                 const SizedBox(width: 16),
                 
@@ -302,44 +322,61 @@ class _AdminMastersScreenState extends State<AdminMastersScreen> {
             ),
             const SizedBox(height: 16),
             
-            // Информация о портфолио
-            if (master.portfolio.isNotEmpty) ...[
-              Text(
-                'Портфолио: ${master.portfolio.length} фото',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
+            // Информация о портфолио с обработкой ошибок
+            Text(
+              'Портфолио: ${master.portfolio.length} фото',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
               ),
-              const SizedBox(height: 8),
+            ),
+            const SizedBox(height: 8),
+            if (master.portfolio.isNotEmpty)
               SizedBox(
                 height: 60,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   itemCount: master.portfolio.length,
                   itemBuilder: (context, index) {
+                    final imageBase64 = master.portfolio[index];
                     return Container(
                       width: 60,
                       height: 60,
                       margin: const EdgeInsets.only(right: 8),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(8),
-                        image: DecorationImage(
-                          image: NetworkImage(master.portfolio[index]),
-                          fit: BoxFit.cover,
-                        ),
+                        color: Colors.grey[200],
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Builder(
+                        builder: (context) {
+                          try {
+                            return Image.memory(
+                              base64Decode(imageBase64),
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                if (kDebugMode) {
+                                  print('Error loading portfolio image: $error');
+                                }
+                                return const Icon(Icons.error_outline, size: 30, color: Colors.red);
+                              },
+                            );
+                          } catch (e) {
+                            if (kDebugMode) {
+                              print('Error decoding portfolio image: $e');
+                            }
+                            return const Icon(Icons.broken_image, size: 30, color: Colors.red);
+                          }
+                        },
                       ),
                     );
                   },
                 ),
-              ),
-            ] else ...[
+              )
+            else
               const Text(
-                'Портфолио: нет фотографий',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
+                'Нет фотографий в портфолио',
+                style: TextStyle(color: Colors.grey),
               ),
-            ],
             const SizedBox(height: 16),
             
             // Кнопки действий
@@ -347,28 +384,43 @@ class _AdminMastersScreenState extends State<AdminMastersScreen> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 // Кнопка обновления портфолио
-                OutlinedButton.icon(
+                IconButton(
                   onPressed: () => _updatePortfolio(master),
                   icon: const Icon(Icons.photo_library),
-                  label: const Text('Портфолио'),
+                  style: IconButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    padding: const EdgeInsets.all(12),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 
                 // Кнопка редактирования
-                OutlinedButton.icon(
+                IconButton(
                   onPressed: () => _editMaster(master),
                   icon: const Icon(Icons.edit),
-                  label: const Text('Изменить'),
+                  style: IconButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    padding: const EdgeInsets.all(12),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 
                 // Кнопка удаления
-                OutlinedButton.icon(
+                IconButton(
                   onPressed: () => _deleteMaster(master),
                   icon: const Icon(Icons.delete, color: Colors.red),
-                  label: const Text(
-                    'Удалить',
-                    style: TextStyle(color: Colors.red),
+                  style: IconButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: const BorderSide(color: Colors.red),
+                    ),
+                    padding: const EdgeInsets.all(12),
                   ),
                 ),
               ],

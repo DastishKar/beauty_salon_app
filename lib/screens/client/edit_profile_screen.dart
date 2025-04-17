@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -222,8 +223,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         throw Exception('Пользователь не найден');
       }
       
-      // URL фото профиля
-      String? photoURL = currentUser.photoURL;
+      // Base64 фото профиля
+      String? photoBase64 = currentUser.photoBase64;
       
       // Загружаем новое фото, если оно выбрано
       if (_selectedImage != null) {
@@ -232,19 +233,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             print('Начинаем загрузку нового фото профиля');
           }
           
-          // Если старое фото существует, удаляем его
-          if (photoURL != null && photoURL.isNotEmpty) {
-            await _imageUploadService.deleteImage(photoURL);
-          }
-          
           // Загружаем новое фото
-          photoURL = await _imageUploadService.uploadImage(
+          photoBase64 = await _imageUploadService.uploadImage(
             _selectedImage!, 
             'users/${currentUser.id}/profile',
           );
           
           if (kDebugMode) {
-            print('Новое фото профиля успешно загружено: $photoURL');
+            print('Новое фото профиля успешно загружено');
           }
         } catch (e) {
           if (kDebugMode) {
@@ -277,7 +273,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         displayName: _nameController.text.trim(),
         phoneNumber: _phoneController.text.trim(),
         language: _selectedLanguage,
-        photoURL: photoURL,
+        photoBase64: photoBase64,
       );
       
       if (kDebugMode) {
@@ -349,10 +345,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         backgroundColor: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
                         backgroundImage: _selectedImage != null
                             ? FileImage(_selectedImage!)
-                            : (user.photoURL != null && user.photoURL!.isNotEmpty
-                                ? NetworkImage(user.photoURL!) as ImageProvider
+                            : (user.photoBase64 != null
+                                ? MemoryImage(base64Decode(user.photoBase64!)) as ImageProvider
                                 : null),
-                        child: _selectedImage == null && (user.photoURL == null || user.photoURL!.isEmpty)
+                        child: _selectedImage == null && user.photoBase64 == null
                             ? const Icon(Icons.person, size: 60, color: Colors.grey)
                             : null,
                       ),

@@ -4,12 +4,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
+import '../../services/image_upload_service.dart';
 
 import '../models/review_model.dart';
 
 class ReviewsService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
+  final ImageUploadService _imageUploadService = ImageUploadService();
 
   // Получение отзывов для мастера
   Future<List<ReviewModel>> getMasterReviews(String masterId) async {
@@ -55,46 +57,43 @@ class ReviewsService {
   Future<String?> createReview({
     required String clientId,
     required String clientName,
-    String? clientPhotoURL,
+    required String? clientPhotoBase64,
     required String masterId,
     String? appointmentId,
     required double rating,
     required String comment,
-    List<File>? photoFiles,
+    required List<File> photoFiles,
   }) async {
     try {
-      // Загружаем фотографии, если они есть
-      List<String> photoURLs = [];
-      if (photoFiles != null && photoFiles.isNotEmpty) {
-        photoURLs = await _uploadPhotos(clientId, masterId, photoFiles);
+      // Convert photos to base64
+      List<String> photosBase64 = [];
+      if (photoFiles.isNotEmpty) {
+        photosBase64 = await _imageUploadService.uploadMultipleImages(
+          photoFiles,
+          'reviews',
+        );
       }
 
-      // Определяем, является ли отзыв подтвержденным (если есть ID записи)
-      final bool isVerified = appointmentId != null;
-
-      // Создаем отзыв в Firestore
+      // Create review data
       final reviewData = {
         'clientId': clientId,
         'clientName': clientName,
-        'clientPhotoURL': clientPhotoURL,
+        'clientPhotoBase64': clientPhotoBase64,
         'masterId': masterId,
         'appointmentId': appointmentId,
         'rating': rating,
         'comment': comment,
-        'photoURLs': photoURLs,
-        'createdAt': FieldValue.serverTimestamp(),
-        'isVerified': isVerified,
+        'photosBase64': photosBase64,
+        'createdAt': DateTime.now().millisecondsSinceEpoch,
+        'isVerified': appointmentId != null,
       };
 
+      // Save to Firestore
       final docRef = await _firestore.collection('reviews').add(reviewData);
-
-      // Обновляем средний рейтинг мастера
-      await _updateMasterRating(masterId);
-
       return docRef.id;
     } catch (e) {
       if (kDebugMode) {
-        print('Ошибка при создании отзыва: $e');
+        print('Error creating review: $e');
       }
       return null;
     }

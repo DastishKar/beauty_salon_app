@@ -1,7 +1,10 @@
 // lib/screens/client/master_details_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
+import 'dart:convert';
+import 'dart:math';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/master_model.dart';
@@ -83,99 +86,114 @@ class _MasterDetailsScreenState extends State<MasterDetailsScreen> with SingleTi
     final languageCode = Provider.of<LanguageService>(context).languageCode;
     
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.master.displayName),
-      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : CustomScrollView(
-              slivers: [
-                // Верхняя часть с фото и именем мастера
-                SliverAppBar(
-                  expandedHeight: 300,
-                  pinned: true,
-                  automaticallyImplyLeading: false,
-                  flexibleSpace: FlexibleSpaceBar(
-                    title: Text(widget.master.displayName),
-                    background: widget.master.photoURL != null
-                        ? Image.network(
-                            widget.master.photoURL!,
-                            fit: BoxFit.cover,
-                          )
-                        : Container(
-                            color: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
-                            child: const Center(
-                              child: Icon(
-                                Icons.person,
-                                size: 100,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ),
-                  ),
-                ),
-                
-                // Табы для навигации по секциям информации
-                SliverPersistentHeader(
-                  delegate: _SliverAppBarDelegate(
-                    TabBar(
-                      controller: _tabController,
-                      tabs: [
-                        Tab(text: localizations.translate('about')),
-                        Tab(text: localizations.translate('portfolio')),
-                        Tab(text: localizations.translate('schedule')),
-                        Tab(text: localizations.translate('reviews')),
-                      ],
+          : NestedScrollView(
+              headerSliverBuilder: (context, innerBoxIsScrolled) {
+                return [
+                  SliverAppBar(
+                    expandedHeight: 300,
+                    pinned: true,
+                    flexibleSpace: FlexibleSpaceBar(
+                      background: _buildMasterPhoto(),
                     ),
                   ),
-                  pinned: true,
-                ),
-                
-                // Контент табов
-                SliverFillRemaining(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      // Вкладка О мастере
-                      _buildAboutTab(context, localizations, languageCode),
-                      
-                      // Вкладка Портфолио
-                      _buildPortfolioTab(context),
-                      
-                      // Вкладка Расписание
-                      _buildScheduleTab(context, localizations),
-                      
-                      // Вкладка Отзывы
-                      _buildReviewsTab(context, localizations),
-                    ],
+                  SliverToBoxAdapter(
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.master.displayName,
+                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          // Display specializations as chips
+                          
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                  SliverPersistentHeader(
+                    delegate: _SliverAppBarDelegate(
+                      TabBar(
+                        controller: _tabController,
+                        tabs: [
+                          Tab(text: localizations.translate('about')),
+                          Tab(text: localizations.translate('portfolio')),
+                          Tab(text: localizations.translate('schedule')),
+                          Tab(text: localizations.translate('reviews')),
+                        ],
+                      ),
+                    ),
+                    pinned: true,
+                  ),
+                ];
+              },
+              body: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildAboutTab(context, localizations, languageCode),
+                  _buildPortfolioTab(context),
+                  _buildScheduleTab(context, localizations),
+                  _buildReviewsTab(context, localizations),
+                ],
+              ),
             ),
-      
-      // Кнопка для записи к мастеру
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(16),
         child: ElevatedButton(
-          onPressed: () {
-            if (_services.isNotEmpty) {
-              Navigator.of(context).push(
-               MaterialPageRoute(
-                 builder: (context) => BookingScreen(
-                   service: _services[0], // Передаем первую услугу из списка
-                   selectedMaster: widget.master,
-                  ),
-                ),
-              );
-            } else {
-             ScaffoldMessenger.of(context).showSnackBar(
-               SnackBar(
-                 content: Text(localizations.translate('no_services_available')),
-               ),
-             );
-            }
-          },
+          onPressed: _services.isNotEmpty 
+              ? () => _onBookAppointment(context, localizations)
+              : null,
           child: Text(localizations.translate('book_with_master')),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMasterPhoto() {
+    if (widget.master.photoBase64 == null) {
+      return Container(
+        color: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
+        child: const Center(
+          child: Icon(Icons.person, size: 100, color: Colors.grey),
+        ),
+      );
+    }
+
+    try {
+      return Image.memory(
+        base64Decode(widget.master.photoBase64!),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            color: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
+            child: const Center(
+              child: Icon(Icons.error_outline, size: 100, color: Colors.red),
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      return Container(
+        color: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
+        child: const Center(
+          child: Icon(Icons.broken_image, size: 100, color: Colors.red),
+        ),
+      );
+    }
+  }
+
+  void _onBookAppointment(BuildContext context, AppLocalizations localizations) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => BookingScreen(
+          service: _services[0],
+          selectedMaster: widget.master,
         ),
       ),
     );
@@ -264,29 +282,27 @@ class _MasterDetailsScreenState extends State<MasterDetailsScreen> with SingleTi
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 )
-              : ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _services.length,
-                  itemBuilder: (context, index) {
-                    return ServiceCard(
-                      service: _services[index],
-                      isSmall: true,
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => BookingScreen(
-                              service: _services[index],
-                              selectedMaster: widget.master,
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
+              : _buildServicesList(),
         ],
       ),
+    );
+  }
+
+  Widget _buildServicesList() {
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _services.length,
+      padding: EdgeInsets.zero,
+      itemBuilder: (context, index) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8.0),
+          child: ServiceCard(
+            service: _services[index],
+            onTap: () => _onBookAppointment(context, AppLocalizations.of(context)),
+          ),
+        );
+      },
     );
   }
 
@@ -311,7 +327,7 @@ class _MasterDetailsScreenState extends State<MasterDetailsScreen> with SingleTi
       ),
       itemCount: widget.master.portfolio.length,
       itemBuilder: (context, index) {
-        final imageUrl = widget.master.portfolio[index];
+        final imageBase64 = widget.master.portfolio[index];
         return GestureDetector(
           onTap: () {
             // Открыть изображение на весь экран
@@ -325,8 +341,8 @@ class _MasterDetailsScreenState extends State<MasterDetailsScreen> with SingleTi
                       boundaryMargin: const EdgeInsets.all(20),
                       minScale: 0.5,
                       maxScale: 4,
-                      child: Image.network(
-                        imageUrl,
+                      child: Image.memory(
+                        base64Decode(imageBase64),
                         fit: BoxFit.contain,
                       ),
                     ),
@@ -337,19 +353,16 @@ class _MasterDetailsScreenState extends State<MasterDetailsScreen> with SingleTi
           },
           child: ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              imageUrl,
+            child: Image.memory(
+              base64Decode(imageBase64),
               fit: BoxFit.cover,
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return Center(
-                  child: CircularProgressIndicator(
-                    value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded / 
-                            loadingProgress.expectedTotalBytes!
-                        : null,
-                  ),
-                );
+              frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                if (wasSynchronouslyLoaded) return child;
+                return frame != null
+                    ? child
+                    : Center(
+                        child: CircularProgressIndicator(),
+                      );
               },
               errorBuilder: (context, error, stackTrace) {
                 return Container(

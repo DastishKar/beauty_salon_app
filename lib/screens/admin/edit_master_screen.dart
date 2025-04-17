@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:convert';
 
 import '../../models/master_model.dart';
 import '../../services/masters_service.dart';
@@ -30,7 +31,7 @@ class _EditMasterScreenState extends State<EditMasterScreen> {
   // Переменные для выбранных специализаций и фото
   List<String> _selectedSpecializations = [];
   File? _selectedPhoto;
-  String? _currentPhotoURL;
+  String? _currentPhotoBase64; // Changed from _currentPhotoURL
   
   // Список доступных специализаций
   final List<String> _availableSpecializations = [
@@ -64,7 +65,7 @@ class _EditMasterScreenState extends State<EditMasterScreen> {
       _descriptionKkController.text = widget.master!.description['kk'] ?? '';
       _descriptionEnController.text = widget.master!.description['en'] ?? '';
       _selectedSpecializations = List<String>.from(widget.master!.specializations);
-      _currentPhotoURL = widget.master!.photoURL;
+      _currentPhotoBase64 = widget.master!.photoBase64; // Changed from photoURL
     }
   }
   
@@ -143,7 +144,7 @@ class _EditMasterScreenState extends State<EditMasterScreen> {
           description: description,
           specializations: _selectedSpecializations,
           photoFile: _selectedPhoto,
-          currentPhotoURL: _currentPhotoURL,
+          currentPhotoBase64: _currentPhotoBase64,
         );
       }
       
@@ -205,14 +206,14 @@ class _EditMasterScreenState extends State<EditMasterScreen> {
                                     image: FileImage(_selectedPhoto!),
                                     fit: BoxFit.cover,
                                   )
-                                : (_currentPhotoURL != null
+                                : (_currentPhotoBase64 != null
                                     ? DecorationImage(
-                                        image: NetworkImage(_currentPhotoURL!),
+                                        image: MemoryImage(base64Decode((_currentPhotoBase64!))),
                                         fit: BoxFit.cover,
                                       )
                                     : null),
                           ),
-                          child: (_selectedPhoto == null && _currentPhotoURL == null)
+                          child: (_selectedPhoto == null && _currentPhotoBase64 == null)
                               ? const Icon(Icons.add_a_photo, size: 40, color: Colors.grey)
                               : null,
                         ),

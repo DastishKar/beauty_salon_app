@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Image to Base64 Converter</title>
+    <style>
+        .result {
+            word-break: break-all;
+            margin: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <input type="file" id="imageInput" accept="image/*">
+    <button onclick="copyToClipboard()">Copy Base64</button>
+    <div id="result" class="result"></div>
+
+    <script>
+        document.getElementById('imageInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            
+            reader.onload = function() {
+                const base64String = reader.result.split(',')[1];
+                document.getElementById('result').textContent = base64String;
+            }
+            
+            reader.readAsDataURL(file);
+        });
+
+        function copyToClipboard() {
+            const text = document.getElementById('result').textContent;
+            navigator.clipboard.writeText(text);
+            alert('Copied to clipboard!');
+        }
+    </script>
+</body>
+</html>

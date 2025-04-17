@@ -36,7 +36,7 @@ Notes:
 ------
 - Some files may have been excluded based on .gitignore rules and Repomix's configuration
 - Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
-- Only files matching these patterns are included: lib/services/masters_service.dart
+- Only files matching these patterns are included: lib/screens/admin
 - Files matching patterns in .gitignore are excluded
 - Files matching default ignore patterns are excluded
 - Files are sorted by Git change count (files with more changes are at the bottom)
@@ -47,536 +47,3313 @@ Additional Info:
 ================================================================
 Directory Structure
 ================================================================
-lib/services/masters_service.dart
+lib/screens/admin/admin_analytics_screen.dart
+lib/screens/admin/admin_appointments_screen.dart
+lib/screens/admin/admin_home_screen.dart
+lib/screens/admin/admin_masters_screen.dart
+lib/screens/admin/admin_services_screen.dart
+lib/screens/admin/edit_master_screen.dart
+lib/screens/admin/edit_service_screen.dart
 
 ================================================================
 Files
 ================================================================
 
 ================
-File: lib/services/masters_service.dart
+File: lib/screens/admin/admin_analytics_screen.dart
 ================
-// lib/services/masters_service.dart
+// lib/screens/admin/admin_analytics_screen.dart
 
-import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:collection/collection.dart';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart';
+import '../../l10n/app_localizations.dart';
+import '../../models/appointment_model.dart';
+import '../../models/service_model.dart';
+import '../../models/master_model.dart';
+import '../../services/auth_service.dart';
+import '../../services/appointments_service.dart';
+import '../../services/services_service.dart';
+import '../../services/masters_service.dart';
+import '../../widgets/loading_overlay.dart';
 
-import '../models/master_model.dart';
+class AdminAnalyticsScreen extends StatefulWidget {
+  const AdminAnalyticsScreen({super.key});
 
-class MastersService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  
-  // Получение всех мастеров
-  Future<List<MasterModel>> getAllMasters() async {
-    try {
-      final QuerySnapshot snapshot = await _firestore
-          .collection('masters')
-          .get();
-      
-      return snapshot.docs.map((doc) {
-        return MasterModel.fromMap(doc.id, doc.data() as Map<String, dynamic>);
-      }).toList();
-    } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка при получении мастеров: $e');
-      }
-      return [];
-    }
-  }
-  
-  // Получение мастера по ID
-  Future<MasterModel?> getMasterById(String masterId) async {
-    try {
-      final DocumentSnapshot doc = await _firestore
-          .collection('masters')
-          .doc(masterId)
-          .get();
-      
-      if (doc.exists) {
-        return MasterModel.fromMap(doc.id, doc.data() as Map<String, dynamic>);
-      }
-      return null;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка при получении мастера: $e');
-      }
-      return null;
-    }
-  }
-  
-  // Получение мастеров по услуге
-  Future<List<MasterModel>> getMastersByService(String serviceId) async {
-    try {
-      // Получаем информацию об услуге для проверки доступных мастеров
-      final serviceDoc = await _firestore.collection('services').doc(serviceId).get();
-      
-      if (!serviceDoc.exists) {
-        return [];
-      }
-      
-      final serviceData = serviceDoc.data() as Map<String, dynamic>;
-      final availableMasters = Map<String, bool>.from(serviceData['availableMasters'] ?? {});
-      
-      if (availableMasters.isEmpty) {
-        return [];
-      }
-      
-      // Получаем только тех мастеров, которые могут выполнять данную услугу
-      final List<MasterModel> masters = [];
-      
-      // Используем батч-запросы для эффективного получения мастеров
-      final batch = <Future<DocumentSnapshot>>[];
-      
-      availableMasters.forEach((masterId, isAvailable) {
-        if (isAvailable) {
-          batch.add(_firestore.collection('masters').doc(masterId).get());
-        }
-      });
-      
-      final results = await Future.wait(batch);
-      
-      for (var doc in results) {
-        if (doc.exists) {
-          masters.add(MasterModel.fromMap(doc.id, doc.data() as Map<String, dynamic>));
-        }
-      }
-      
-      return masters;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка при получении мастеров по услуге: $e');
-      }
-      return [];
-    }
-  }
-  
-  // Получение мастеров по специализации
-  Future<List<MasterModel>> getMastersBySpecialization(String specialization) async {
-    try {
-      final QuerySnapshot snapshot = await _firestore
-          .collection('masters')
-          .get();
-      
-      final List<MasterModel> masters = snapshot.docs.map((doc) {
-        return MasterModel.fromMap(doc.id, doc.data() as Map<String, dynamic>);
-      }).toList();
-      
-      return masters.where((master) => 
-        master.specializations.contains(specialization)
-      ).toList();
-    } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка при получении мастеров по специализации: $e');
-      }
-      return [];
-    }
-  }
-  
-  // Получение доступных временных слотов мастера на определенную дату
-  Future<List<String>> getAvailableTimeSlots(String masterId, DateTime date) async {
-    try {
-      // Получаем мастера для доступа к его расписанию
-      final master = await getMasterById(masterId);
-      if (master == null) {
-        return [];
-      }
-      
-      // Получаем день недели (понедельник, вторник и т.д.)
-      final weekday = _getWeekdayName(date.weekday);
-      
-      // Получаем рабочее расписание мастера на этот день
-      final daySchedule = master.schedule[weekday];
-      if (daySchedule == null) {
-        // Мастер не работает в этот день
-        return [];
-      }
-      
-      // Получаем уже существующие записи к мастеру на эту дату
-      final existingAppointments = await _getExistingAppointments(masterId, date);
-      
-      // Генерируем свободные временные слоты с учетом существующих записей
-      return _generateAvailableTimeSlots(daySchedule, existingAppointments);
-    } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка при получении доступных временных слотов: $e');
-      }
-      return [];
-    }
-  }
-  
-  // Вспомогательный метод для получения названия дня недели
-  String _getWeekdayName(int weekday) {
-    switch (weekday) {
-      case 1: return 'monday';
-      case 2: return 'tuesday';
-      case 3: return 'wednesday';
-      case 4: return 'thursday';
-      case 5: return 'friday';
-      case 6: return 'saturday';
-      case 7: return 'sunday';
-      default: return 'monday';
-    }
-  }
-  
-  // Получение существующих записей к мастеру на определенную дату
-  Future<List<Map<String, String>>> _getExistingAppointments(String masterId, DateTime date) async {
-    try {
-      // Форматируем дату в формат ГГГГ-ММ-ДД для сравнения с базой данных
-      final formattedDate = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-      
-      final QuerySnapshot snapshot = await _firestore
-          .collection('appointments')
-          .where('masterId', isEqualTo: masterId)
-          .where('date', isEqualTo: formattedDate)
-          .where('status', isEqualTo: 'booked')
-          .get();
-      
-      return snapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        return {
-          'startTime': data['startTime'] as String,
-          'endTime': data['endTime'] as String,
-        };
-      }).toList();
-    } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка при получении существующих записей: $e');
-      }
-      return [];
-    }
-  }
-  
-  // Генерация свободных временных слотов
-  List<String> _generateAvailableTimeSlots(
-    DaySchedule daySchedule,
-    List<Map<String, String>> existingAppointments
-  ) {
-    // Определяем начальное и конечное время работы
-    final startTimeParts = daySchedule.start.split(':');
-    final endTimeParts = daySchedule.end.split(':');
-    
-    final startHour = int.parse(startTimeParts[0]);
-    final startMinute = int.parse(startTimeParts[1]);
-    final endHour = int.parse(endTimeParts[0]);
-    final endMinute = int.parse(endTimeParts[1]);
-    
-    // Создаем временные слоты с шагом 30 минут
-    final List<String> allSlots = [];
-    var currentHour = startHour;
-    var currentMinute = startMinute;
-    
-    while (currentHour < endHour || (currentHour == endHour && currentMinute < endMinute)) {
-      final timeSlot = '${currentHour.toString().padLeft(2, '0')}:${currentMinute.toString().padLeft(2, '0')}';
-      allSlots.add(timeSlot);
-      
-      // Переходим к следующему временному слоту
-      currentMinute += 30;
-      if (currentMinute >= 60) {
-        currentHour += 1;
-        currentMinute = 0;
-      }
-    }
-    
-    // Исключаем временные слоты, которые уже заняты
-    final List<String> availableSlots = [];
-    
-    for (var slot in allSlots) {
-      bool isAvailable = true;
-      
-      // Проверяем, не пересекается ли слот с существующими записями
-      for (var appointment in existingAppointments) {
-        final appointmentStart = appointment['startTime']!;
-        final appointmentEnd = appointment['endTime']!;
-        
-        // Сравниваем временные строки корректно
-        // Слот недоступен, если он начинается после начала записи, но до её окончания
-        // или если запись начинается во время этого слота
-        if ((slot.compareTo(appointmentStart) >= 0 && slot.compareTo(appointmentEnd) < 0) ||
-            (appointmentStart.compareTo(slot) >= 0 && appointmentStart.compareTo(_getNextTimeSlot(slot)) < 0)) {
-          isAvailable = false;
-          break;
-        }
-      }
-      
-      // Проверяем, не попадает ли слот в перерыв
-      for (var breakTime in daySchedule.breaks) {
-        if (slot.compareTo(breakTime.start) >= 0 && slot.compareTo(breakTime.end) < 0) {
-          isAvailable = false;
-          break;
-        }
-      }
-      
-      if (isAvailable) {
-        availableSlots.add(slot);
-      }
-    }
-    
-    return availableSlots;
-  }
-  
-  // Вспомогательный метод для получения следующего временного слота
-  String _getNextTimeSlot(String timeSlot) {
-    final parts = timeSlot.split(':');
-    var hour = int.parse(parts[0]);
-    var minute = int.parse(parts[1]) + 30;
-    
-    if (minute >= 60) {
-      hour += 1;
-      minute = 0;
-    }
-    
-    return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
-  }
+  @override
+  State<AdminAnalyticsScreen> createState() => _AdminAnalyticsScreenState();
+}
 
-  // Добавьте эти методы в класс MastersService в файле lib/services/masters_service.dart
-
-  // Создание нового мастера
-  Future<String?> createMaster({
-    required String displayName,
-    required String experience,
-    required Map<String, String> description,
-    required List<String> specializations,
-    File? photoFile,
-  }) async {
-    try {
-      // Создаем пользователя для мастера в auth
-      final String userId = 'master-${DateTime.now().millisecondsSinceEpoch}';
-      
-      // Загружаем фото, если оно есть
-      String? photoURL;
-      if (photoFile != null) {
-        photoURL = await _uploadMasterPhoto(photoFile, userId);
-      }
-      
-      // Создаем расписание по умолчанию (можно настроить позже)
-      final Map<String, DaySchedule> defaultSchedule = {
-        'monday': DaySchedule(start: '09:00', end: '18:00', breaks: [TimeBreak(start: '13:00', end: '14:00')]),
-        'tuesday': DaySchedule(start: '09:00', end: '18:00', breaks: [TimeBreak(start: '13:00', end: '14:00')]),
-        'wednesday': DaySchedule(start: '09:00', end: '18:00', breaks: [TimeBreak(start: '13:00', end: '14:00')]),
-        'thursday': DaySchedule(start: '09:00', end: '18:00', breaks: [TimeBreak(start: '13:00', end: '14:00')]),
-        'friday': DaySchedule(start: '09:00', end: '18:00', breaks: [TimeBreak(start: '13:00', end: '14:00')]),
-        'saturday': DaySchedule(start: '10:00', end: '16:00', breaks: []),
-      };
-      
-      // Создаем данные мастера
-      final masterData = {
-        'userId': userId,
-        'displayName': displayName,
-        'specializations': specializations,
-        'experience': experience,
-        'description': description,
-        'photoURL': photoURL,
-        'portfolio': [],
-        'schedule': _scheduleToMap(defaultSchedule),
-        'rating': 0.0,
-        'reviewsCount': 0,
-      };
-      
-      // Сохраняем в Firestore
-      final DocumentReference docRef = await _firestore
-          .collection('masters')
-          .add(masterData);
-      
-      return docRef.id;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка при создании мастера: $e');
-      }
-      return null;
-    }
+class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  bool _isLoading = true;
+  
+  // Services for data fetching
+  final AppointmentsService _appointmentsService = AppointmentsService();
+  final ServicesService _servicesService = ServicesService();
+  final MastersService _mastersService = MastersService();
+  
+  // Data containers
+  List<AppointmentModel> _appointments = [];
+  List<ServiceModel> _services = [];
+  List<MasterModel> _masters = [];
+  
+  // Analytics data
+  int _totalAppointments = 0;
+  double _totalRevenue = 0;
+  int _completedAppointments = 0;
+  int _cancelledAppointments = 0;
+  double _completionRate = 0;
+  
+  // Filtered data for current period
+  List<AppointmentModel> _currentPeriodAppointments = [];
+  
+  // Time period filters
+  String _selectedPeriod = 'month'; // 'week', 'month', 'year'
+  DateTime _startDate = DateTime.now().subtract(const Duration(days: 30));
+  DateTime _endDate = DateTime.now();
+  
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    _loadData();
   }
   
-  // Обновление данных мастера
-  Future<bool> updateMaster({
-    required String masterId,
-    required String displayName,
-    required String experience,
-    required Map<String, String> description,
-    required List<String> specializations,
-    File? photoFile,
-    String? currentPhotoURL,
-  }) async {
-    try {
-      // Получаем текущие данные мастера
-      final DocumentSnapshot doc = await _firestore
-          .collection('masters')
-          .doc(masterId)
-          .get();
-      
-      if (!doc.exists) {
-        throw Exception('Мастер не найден');
-      }
-      
-      final masterData = doc.data() as Map<String, dynamic>;
-      final String userId = masterData['userId'] as String;
-      
-      // Загружаем новое фото, если оно выбрано
-      String? photoURL = currentPhotoURL;
-      if (photoFile != null) {
-        photoURL = await _uploadMasterPhoto(photoFile, userId);
-      }
-      
-      // Обновляем данные мастера
-      await _firestore
-          .collection('masters')
-          .doc(masterId)
-          .update({
-            'displayName': displayName,
-            'specializations': specializations,
-            'experience': experience,
-            'description': description,
-            'photoURL': photoURL,
-          });
-      
-      return true;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка при обновлении мастера: $e');
-      }
-      return false;
-    }
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
   
-  // Удаление мастера
-  Future<bool> deleteMaster(String masterId) async {
-    try {
-      // Получаем данные мастера
-      final DocumentSnapshot doc = await _firestore
-          .collection('masters')
-          .doc(masterId)
-          .get();
-      
-      if (!doc.exists) {
-        throw Exception('Мастер не найден');
-      }
-      
-      // Удаляем мастера из Firestore
-      await _firestore
-          .collection('masters')
-          .doc(masterId)
-          .delete();
-      
-      return true;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка при удалении мастера: $e');
-      }
-      return false;
-    }
-  }
-  
-  // Обновление портфолио мастера
-  Future<bool> updateMasterPortfolio(String masterId, List<File> photos) async {
-    try {
-      // Получаем текущие данные мастера
-      final DocumentSnapshot doc = await _firestore
-          .collection('masters')
-          .doc(masterId)
-          .get();
-      
-      if (!doc.exists) {
-        throw Exception('Мастер не найден');
-      }
-      
-      final masterData = doc.data() as Map<String, dynamic>;
-      final String userId = masterData['userId'] as String;
-      final List<String> currentPortfolio = List<String>.from(masterData['portfolio'] ?? []);
-      
-      // Загружаем новые фото
-      final List<String> newPhotos = [];
-      for (final file in photos) {
-        final photoURL = await _uploadPortfolioPhoto(file, userId);
-        if (photoURL != null) {
-          newPhotos.add(photoURL);
-        }
-      }
-      
-      // Объединяем с текущим портфолио
-      final List<String> updatedPortfolio = [...currentPortfolio, ...newPhotos];
-      
-      // Обновляем данные мастера
-      await _firestore
-          .collection('masters')
-          .doc(masterId)
-          .update({
-            'portfolio': updatedPortfolio,
-          });
-      
-      return true;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка при обновлении портфолио: $e');
-      }
-      return false;
-    }
-  }
-  
-  // Загрузка фото мастера в Storage
-  Future<String?> _uploadMasterPhoto(File file, String userId) async {
-    try {
-      final String fileName = 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final Reference ref = FirebaseStorage.instance
-          .ref()
-          .child('masters')
-          .child(userId)
-          .child(fileName);
-      
-      final UploadTask uploadTask = ref.putFile(file);
-      final TaskSnapshot snapshot = await uploadTask;
-      final String downloadURL = await snapshot.ref.getDownloadURL();
-      
-      return downloadURL;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка при загрузке фото мастера: $e');
-      }
-      return null;
-    }
-  }
-  
-  // Загрузка фото для портфолио в Storage
-  Future<String?> _uploadPortfolioPhoto(File file, String userId) async {
-    try {
-      final String fileName = 'portfolio_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final Reference ref = FirebaseStorage.instance
-          .ref()
-          .child('masters')
-          .child(userId)
-          .child('portfolio')
-          .child(fileName);
-      
-      final UploadTask uploadTask = ref.putFile(file);
-      final TaskSnapshot snapshot = await uploadTask;
-      final String downloadURL = await snapshot.ref.getDownloadURL();
-      
-      return downloadURL;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка при загрузке фото для портфолио: $e');
-      }
-      return null;
-    }
-  }
-  
-  // Преобразование расписания в Map для сохранения в Firestore
-  Map<String, dynamic> _scheduleToMap(Map<String, DaySchedule> schedule) {
-    final Map<String, dynamic> result = {};
-    
-    schedule.forEach((day, daySchedule) {
-      result[day] = {
-        'start': daySchedule.start,
-        'end': daySchedule.end,
-        'breaks': daySchedule.breaks.map((breakTime) => {
-          'start': breakTime.start,
-          'end': breakTime.end,
-        }).toList(),
-      };
+  // Load all necessary data
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
     });
     
-    return result;
+    try {
+      // Load appointments, services, and masters
+      final appointments = await _appointmentsService.getAllAppointments();
+      final services = await _servicesService.getAllServices();
+      final masters = await _mastersService.getAllMasters();
+      
+      if (mounted) {
+        setState(() {
+          _appointments = appointments;
+          _services = services;
+          _masters = masters;
+          
+          // Set date range based on selected period
+          _updateDateRange();
+          
+          // Calculate analytics metrics
+          _calculateAnalytics();
+          
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading data: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading data: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+  
+  // Update date range based on selected period
+  void _updateDateRange() {
+    final now = DateTime.now();
+    switch (_selectedPeriod) {
+      case 'week':
+        _startDate = DateTime(now.year, now.month, now.day - 7);
+        _endDate = now;
+        break;
+      case 'month':
+        _startDate = DateTime(now.year, now.month - 1, now.day);
+        _endDate = now;
+        break;
+      case 'year':
+        _startDate = DateTime(now.year - 1, now.month, now.day);
+        _endDate = now;
+        break;
+      case 'custom':
+        // Keep existing custom date range
+        break;
+    }
+    
+    // Filter appointments for current period
+    _filterAppointmentsForPeriod();
+  }
+  
+  // Filter appointments for the selected date range
+  void _filterAppointmentsForPeriod() {
+    _currentPeriodAppointments = _appointments.where((appointment) {
+      return appointment.date.isAfter(_startDate) && 
+             appointment.date.isBefore(_endDate.add(const Duration(days: 1)));
+    }).toList();
+  }
+  
+  // Calculate analytics metrics based on filtered data
+  void _calculateAnalytics() {
+    // Filter appointments for current period
+    _filterAppointmentsForPeriod();
+    
+    // Total appointments in period
+    _totalAppointments = _currentPeriodAppointments.length;
+    
+    // Completed and cancelled appointments
+    _completedAppointments = _currentPeriodAppointments
+        .where((a) => a.status == 'completed')
+        .length;
+    
+    _cancelledAppointments = _currentPeriodAppointments
+        .where((a) => a.status == 'cancelled')
+        .length;
+    
+    // Completion rate
+    _completionRate = _totalAppointments > 0
+        ? (_completedAppointments / _totalAppointments) * 100
+        : 0;
+    
+    // Total revenue (from completed appointments)
+    _totalRevenue = _currentPeriodAppointments
+        .where((a) => a.status == 'completed')
+        .fold(0, (sum, appointment) => sum + appointment.price);
+  }
+  
+  // Change the selected time period
+  void _changePeriod(String period) {
+    setState(() {
+      _selectedPeriod = period;
+      _updateDateRange();
+      _calculateAnalytics();
+    });
+  }
+  
+  // Open date picker for custom date range
+  Future<void> _selectDateRange() async {
+    final initialDateRange = DateTimeRange(
+      start: _startDate,
+      end: _endDate,
+    );
+    
+    final newDateRange = await showDateRangePicker(
+      context: context,
+      initialDateRange: initialDateRange,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Theme.of(context).primaryColor,
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    
+    if (newDateRange != null) {
+      setState(() {
+        _selectedPeriod = 'custom';
+        _startDate = newDateRange.start;
+        _endDate = newDateRange.end;
+        _calculateAnalytics();
+      });
+    }
+  }
+  
+  // Get service name by ID
+  String _getServiceName(String serviceId) {
+    final service = _services.firstWhereOrNull((s) => s.id == serviceId);
+    return service?.name['ru'] ?? 'Unknown Service';
+  }
+  
+  // Get master name by ID
+  String _getMasterName(String masterId) {
+    final master = _masters.firstWhereOrNull((m) => m.id == masterId);
+    return master?.displayName ?? 'Unknown Master';
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    
+    return LoadingOverlay(
+      isLoading: _isLoading,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(localizations.translate('analytics')),
+          bottom: TabBar(
+            controller: _tabController,
+            tabs: [
+              Tab(text: localizations.translate('overview')),
+              Tab(text: localizations.translate('services')),
+              Tab(text: localizations.translate('masters')),
+            ],
+          ),
+        ),
+        body: Column(
+          children: [
+            // Period selection
+            _buildPeriodSelector(),
+            
+            // Tab content
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  // Overview Tab
+                  _buildOverviewTab(),
+                  
+                  // Services Tab
+                  _buildServicesTab(),
+                  
+                  // Masters Tab
+                  _buildMastersTab(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  // Period selector widget
+  Widget _buildPeriodSelector() {
+    final localizations = AppLocalizations.of(context);
+    final dateFormat = DateFormat('dd.MM.yyyy');
+    
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            localizations.translate('select_period'),
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildPeriodChip('week', localizations.translate('last_week')),
+                const SizedBox(width: 8),
+                _buildPeriodChip('month', localizations.translate('last_month')),
+                const SizedBox(width: 8),
+                _buildPeriodChip('year', localizations.translate('last_year')),
+                const SizedBox(width: 8),
+                ActionChip(
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.date_range,
+                        size: 16,
+                        color: _selectedPeriod == 'custom'
+                            ? Colors.white
+                            : Theme.of(context).primaryColor,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(localizations.translate('custom')),
+                    ],
+                  ),
+                  backgroundColor: _selectedPeriod == 'custom'
+                      ? Theme.of(context).primaryColor
+                      : null,
+                  labelStyle: TextStyle(
+                    color: _selectedPeriod == 'custom'
+                        ? Colors.white
+                        : null,
+                  ),
+                  onPressed: _selectDateRange,
+                ),
+              ],
+            ),
+          ),
+          if (_selectedPeriod == 'custom') ...[
+            const SizedBox(height: 8),
+            Text(
+              '${dateFormat.format(_startDate)} - ${dateFormat.format(_endDate)}',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).primaryColor,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+  
+  // Period selection chip
+  Widget _buildPeriodChip(String period, String label) {
+    return FilterChip(
+      label: Text(label),
+      selected: _selectedPeriod == period,
+      onSelected: (selected) {
+        if (selected) {
+          _changePeriod(period);
+        }
+      },
+      backgroundColor: Colors.grey[200],
+      selectedColor: Theme.of(context).primaryColor,
+      labelStyle: TextStyle(
+        color: _selectedPeriod == period ? Colors.white : Colors.black,
+      ),
+    );
+  }
+  
+  // Overview tab content
+  Widget _buildOverviewTab() {
+    final localizations = AppLocalizations.of(context);
+    final currencyFormat = NumberFormat.currency(symbol: '₸ ', decimalDigits: 0);
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Key metrics cards
+          Row(
+            children: [
+              _buildMetricCard(
+                title: localizations.translate('total_appointments'),
+                value: _totalAppointments.toString(),
+                icon: Icons.calendar_today,
+                color: Colors.blue,
+              ),
+              const SizedBox(width: 16),
+              _buildMetricCard(
+                title: localizations.translate('total_revenue'),
+                value: currencyFormat.format(_totalRevenue),
+                icon: Icons.monetization_on,
+                color: Colors.green,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _buildMetricCard(
+                title: localizations.translate('completion_rate'),
+                value: '${_completionRate.toStringAsFixed(1)}%',
+                icon: Icons.check_circle,
+                color: Colors.purple,
+              ),
+              const SizedBox(width: 16),
+              _buildMetricCard(
+                title: localizations.translate('cancelled'),
+                value: _cancelledAppointments.toString(),
+                icon: Icons.cancel,
+                color: Colors.red,
+              ),
+            ],
+          ),
+          
+          // Revenue trend chart
+          const SizedBox(height: 24),
+          Text(
+            localizations.translate('revenue_trend'),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 200,
+            child: _buildRevenueChart(),
+          ),
+          
+          // Appointments status distribution
+          const SizedBox(height: 24),
+          Text(
+            localizations.translate('appointment_status'),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 200,
+            child: _buildAppointmentStatusChart(),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  // Metric card widget
+  Widget _buildMetricCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Expanded(
+      child: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, color: color),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  
+  // Revenue chart widget
+  Widget _buildRevenueChart() {
+    // Group appointments by date and calculate daily revenue
+    final Map<DateTime, double> dailyRevenue = {};
+    
+    for (final appointment in _currentPeriodAppointments) {
+      if (appointment.status == 'completed') {
+        final date = DateTime(
+          appointment.date.year,
+          appointment.date.month,
+          appointment.date.day,
+        );
+        
+        dailyRevenue[date] = (dailyRevenue[date] ?? 0) + appointment.price;
+      }
+    }
+    
+    // Sort dates and prepare chart data
+    final sortedDates = dailyRevenue.keys.toList()..sort();
+    
+    // If no data, show placeholder
+    if (sortedDates.isEmpty) {
+      return Center(
+        child: Text(
+          AppLocalizations.of(context).translate('no_data_available'),
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+    
+    // Create chart data points
+    final spots = <FlSpot>[];
+    for (int i = 0; i < sortedDates.length; i++) {
+      spots.add(FlSpot(i.toDouble(), dailyRevenue[sortedDates[i]]!));
+    }
+    
+    return LineChart(
+      LineChartData(
+        gridData: FlGridData(show: false),
+        titlesData: FlTitlesData(
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (value, meta) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: Text(
+                    value >= 1000 ? '${(value / 1000).toStringAsFixed(0)}k' : value.toStringAsFixed(0),
+                    style: const TextStyle(
+                      color: Colors.grey,
+                      fontSize: 10,
+                    ),
+                    textAlign: TextAlign.right,
+                  ),
+                );
+              },
+              reservedSize: 40,
+            ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (value, meta) {
+                // Show date for some points to avoid overcrowding
+                if (sortedDates.length <= 7 || value % (sortedDates.length ~/ 5 + 1) == 0) {
+                  if (value.toInt() < sortedDates.length) {
+                    final date = sortedDates[value.toInt()];
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        '${date.day}/${date.month}',
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 10,
+                        ),
+                      ),
+                    );
+                  }
+                }
+                return const SizedBox();
+              },
+              reservedSize: 30,
+            ),
+          ),
+          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        borderData: FlBorderData(show: false),
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            color: Colors.green,
+            barWidth: 3,
+            isStrokeCapRound: true,
+            dotData: FlDotData(show: false),
+            belowBarData: BarAreaData(
+              show: true,
+              color: Colors.green.withOpacity(0.2),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  // Appointment status pie chart
+  Widget _buildAppointmentStatusChart() {
+    // Count appointments by status
+    final Map<String, int> statusCounts = {
+      'completed': 0,
+      'cancelled': 0,
+      'booked': 0,
+      'no-show': 0,
+    };
+    
+    for (final appointment in _currentPeriodAppointments) {
+      statusCounts[appointment.status] = (statusCounts[appointment.status] ?? 0) + 1;
+    }
+    
+    // If no data, show placeholder
+    if (_currentPeriodAppointments.isEmpty) {
+      return Center(
+        child: Text(
+          AppLocalizations.of(context).translate('no_data_available'),
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+    
+    // Colors for different statuses
+    final statusColors = {
+      'completed': Colors.green,
+      'cancelled': Colors.red,
+      'booked': Colors.blue,
+      'no-show': Colors.orange,
+    };
+    
+    // Status labels
+    final statusLabels = {
+      'completed': AppLocalizations.of(context).translate('completed'),
+      'cancelled': AppLocalizations.of(context).translate('cancelled'),
+      'booked': AppLocalizations.of(context).translate('booked'),
+      'no-show': AppLocalizations.of(context).translate('no-show'),
+    };
+    
+    return Row(
+      children: [
+        // Pie chart
+        Expanded(
+          flex: 3,
+          child: PieChart(
+            PieChartData(
+              sections: statusCounts.entries.map((entry) {
+                final status = entry.key;
+                final count = entry.value;
+                final percentage = _totalAppointments > 0
+                    ? (count / _totalAppointments) * 100
+                    : 0;
+                
+                return PieChartSectionData(
+                  color: statusColors[status] ?? Colors.grey,
+                  value: count.toDouble(),
+                  title: '${percentage.toStringAsFixed(1)}%',
+                  radius: 80,
+                  titleStyle: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                );
+              }).toList(),
+              sectionsSpace: 2,
+              centerSpaceRadius: 40,
+            ),
+          ),
+        ),
+        
+        // Legend
+        Expanded(
+          flex: 2,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: statusCounts.entries.map((entry) {
+              final status = entry.key;
+              final count = entry.value;
+              
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: statusColors[status] ?? Colors.grey,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${statusLabels[status] ?? status}: $count',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+  
+  // Services tab content
+  Widget _buildServicesTab() {
+    final localizations = AppLocalizations.of(context);
+    
+    // Calculate service metrics
+    final serviceStats = _calculateServiceStats();
+    
+    // Sort services by appointment count
+    serviceStats.sort((a, b) => b['count'].compareTo(a['count']));
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Services popularity chart
+          Text(
+            localizations.translate('popular_services'),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 200,
+            child: _buildServicesChart(serviceStats),
+          ),
+          
+          // Services table
+          const SizedBox(height: 24),
+          Text(
+            localizations.translate('services_performance'),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 16),
+          _buildServicesTable(serviceStats),
+        ],
+      ),
+    );
+  }
+  
+  // Calculate service statistics
+  List<Map<String, dynamic>> _calculateServiceStats() {
+    // Map to store service stats
+    final Map<String, Map<String, dynamic>> serviceStatsMap = {};
+    
+    // Process appointments
+    for (final appointment in _currentPeriodAppointments) {
+      final serviceId = appointment.serviceId;
+      
+      // Skip if service not found
+      if (!serviceStatsMap.containsKey(serviceId)) {
+        final serviceName = _getServiceName(serviceId);
+        serviceStatsMap[serviceId] = {
+          'id': serviceId,
+          'name': serviceName,
+          'count': 0,
+          'completed': 0,
+          'cancelled': 0,
+          'revenue': 0.0,
+        };
+      }
+      
+      // Update counts
+      serviceStatsMap[serviceId]!['count'] = serviceStatsMap[serviceId]!['count'] + 1;
+      
+      if (appointment.status == 'completed') {
+        serviceStatsMap[serviceId]!['completed'] = serviceStatsMap[serviceId]!['completed'] + 1;
+        serviceStatsMap[serviceId]!['revenue'] = serviceStatsMap[serviceId]!['revenue'] + appointment.price;
+      } else if (appointment.status == 'cancelled') {
+        serviceStatsMap[serviceId]!['cancelled'] = serviceStatsMap[serviceId]!['cancelled'] + 1;
+      }
+    }
+    
+    // Convert map to list
+    return serviceStatsMap.values.toList();
+  }
+  
+  // Services horizontal bar chart
+  Widget _buildServicesChart(List<Map<String, dynamic>> serviceStats) {
+    // If no data, show placeholder
+    if (serviceStats.isEmpty) {
+      return Center(
+        child: Text(
+          AppLocalizations.of(context).translate('no_data_available'),
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+    
+    // Take top 5 services
+    final topServices = serviceStats.take(5).toList();
+    
+    return BarChart(
+      BarChartData(
+        alignment: BarChartAlignment.spaceAround,
+        maxY: topServices.isNotEmpty ? topServices.map((s) => s['count'] as int).reduce((a, b) => a > b ? a : b) * 1.2 : 10,
+        barTouchData: BarTouchData(enabled: false),
+        titlesData: FlTitlesData(
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (value, meta) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: Text(
+                    value.toInt().toString(),
+                    style: const TextStyle(
+                      color: Colors.grey,
+                      fontSize: 10,
+                    ),
+                    textAlign: TextAlign.right,
+                  ),
+                );
+              },
+              reservedSize: 30,
+            ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (value, meta) {
+                if (value.toInt() < topServices.length) {
+                  final service = topServices[value.toInt()];
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      _truncateString(service['name'], 10),
+                      style: const TextStyle(
+                        color: Colors.grey,
+                        fontSize: 10,
+                      ),
+                    ),
+                  );
+                }
+                return const SizedBox();
+              },
+              reservedSize: 30,
+            ),
+          ),
+          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        borderData: FlBorderData(show: false),
+        barGroups: List.generate(topServices.length, (index) {
+          final service = topServices[index];
+          return BarChartGroupData(
+            x: index,
+            barRods: [
+              BarChartRodData(
+                toY: service['count'].toDouble(),
+                color: Theme.of(context).primaryColor,
+                width: 20,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                ),
+              ),
+            ],
+          );
+        }),
+      ),
+    );
+  }
+  
+  // Services performance table
+  Widget _buildServicesTable(List<Map<String, dynamic>> serviceStats) {
+    final localizations = AppLocalizations.of(context);
+    final currencyFormat = NumberFormat.currency(symbol: '₸ ', decimalDigits: 0);
+    
+    if (serviceStats.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            localizations.translate('no_data_available'),
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      );
+    }
+    
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        columns: [
+          DataColumn(label: Text(localizations.translate('service'))),
+          DataColumn(label: Text(localizations.translate('appointments'))),
+          DataColumn(label: Text(localizations.translate('completed'))),
+          DataColumn(label: Text(localizations.translate('cancelled'))),
+          DataColumn(label: Text(localizations.translate('revenue'))),
+        ],
+        rows: serviceStats.map((service) {
+          return DataRow(
+            cells: [
+              DataCell(Text(service['name'])),
+              DataCell(Text(service['count'].toString())),
+              DataCell(Text(service['completed'].toString())),
+              DataCell(Text(service['cancelled'].toString())),
+              DataCell(Text(currencyFormat.format(service['revenue']))),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+  
+  // Masters tab content
+  Widget _buildMastersTab() {
+    final localizations = AppLocalizations.of(context);
+    
+    // Calculate master metrics
+    final masterStats = _calculateMasterStats();
+    
+    // Sort masters by appointment count
+    masterStats.sort((a, b) => b['count'].compareTo(a['count']));
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Masters performance chart
+          Text(
+            localizations.translate('top_masters'),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 200,
+            child: _buildMastersChart(masterStats),
+          ),
+          
+          // Masters table
+          const SizedBox(height: 24),
+          Text(
+            localizations.translate('masters_performance'),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 16),
+          _buildMastersTable(masterStats),
+        ],
+      ),
+    );
+  }
+  
+  // Calculate master statistics
+  List<Map<String, dynamic>> _calculateMasterStats() {
+    // Map to store master stats
+    final Map<String, Map<String, dynamic>> masterStatsMap = {};
+    
+    // Process appointments
+    for (final appointment in _currentPeriodAppointments) {
+      final masterId = appointment.masterId;
+      
+      // Skip if master not found
+      if (!masterStatsMap.containsKey(masterId)) {
+        final masterName = _getMasterName(masterId);
+        masterStatsMap[masterId] = {
+          'id': masterId,
+          'name': masterName,
+          'count': 0,
+          'completed': 0,
+          'cancelled': 0,
+          'revenue': 0.0,
+        };
+      }
+      
+      // Update counts
+      masterStatsMap[masterId]!['count'] = masterStatsMap[masterId]!['count'] + 1;
+      
+      if (appointment.status == 'completed') {
+        masterStatsMap[masterId]!['completed'] = masterStatsMap[masterId]!['completed'] + 1;
+        masterStatsMap[masterId]!['revenue'] = masterStatsMap[masterId]!['revenue'] + appointment.price;
+      } else if (appointment.status == 'cancelled') {
+        masterStatsMap[masterId]!['cancelled'] = masterStatsMap[masterId]!['cancelled'] + 1;
+      }
+    }
+    
+    // Convert map to list
+    return masterStatsMap.values.toList();
+  }
+  
+  // Masters horizontal bar chart
+  Widget _buildMastersChart(List<Map<String, dynamic>> masterStats) {
+    // If no data, show placeholder
+    if (masterStats.isEmpty) {
+      return Center(
+        child: Text(
+          AppLocalizations.of(context).translate('no_data_available'),
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+    
+    // Take top 5 masters
+    final topMasters = masterStats.take(5).toList();
+    
+    return BarChart(
+      BarChartData(
+        alignment: BarChartAlignment.spaceAround,
+        maxY: topMasters.isNotEmpty ? topMasters.map((s) => s['count'] as int).reduce((a, b) => a > b ? a : b) * 1.2 : 10,
+        barTouchData: BarTouchData(enabled: false),
+        titlesData: FlTitlesData(
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (value, meta) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: Text(
+                    value.toInt().toString(),
+                    style: const TextStyle(
+                      color: Colors.grey,
+                      fontSize: 10,
+                    ),
+                    textAlign: TextAlign.right,
+                  ),
+                );
+              },
+              reservedSize: 30,
+            ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (value, meta) {
+                if (value.toInt() < topMasters.length) {
+                  final master = topMasters[value.toInt()];
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      _truncateString(master['name'], 10),
+                      style: const TextStyle(
+                        color: Colors.grey,
+                        fontSize: 10,
+                      ),
+                    ),
+                  );
+                }
+                return const SizedBox();
+              },
+              reservedSize: 30,
+            ),
+          ),
+          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        borderData: FlBorderData(show: false),
+        barGroups: List.generate(topMasters.length, (index) {
+          final master = topMasters[index];
+          return BarChartGroupData(
+            x: index,
+            barRods: [
+              BarChartRodData(
+                toY: master['count'].toDouble(),
+                color: Colors.orange,
+                width: 20,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                ),
+              ),
+            ],
+          );
+        }),
+      ),
+    );
+  }
+  
+  // Masters performance table
+  Widget _buildMastersTable(List<Map<String, dynamic>> masterStats) {
+    final localizations = AppLocalizations.of(context);
+    final currencyFormat = NumberFormat.currency(symbol: '₸ ', decimalDigits: 0);
+    
+    if (masterStats.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            localizations.translate('no_data_available'),
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      );
+    }
+    
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        columns: [
+          DataColumn(label: Text(localizations.translate('master'))),
+          DataColumn(label: Text(localizations.translate('appointments'))),
+          DataColumn(label: Text(localizations.translate('completed'))),
+          DataColumn(label: Text(localizations.translate('cancelled'))),
+          DataColumn(label: Text(localizations.translate('revenue'))),
+        ],
+        rows: masterStats.map((master) {
+          return DataRow(
+            cells: [
+              DataCell(Text(master['name'])),
+              DataCell(Text(master['count'].toString())),
+              DataCell(Text(master['completed'].toString())),
+              DataCell(Text(master['cancelled'].toString())),
+              DataCell(Text(currencyFormat.format(master['revenue']))),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+  
+  // Helper method to truncate long strings
+  String _truncateString(String text, int maxLength) {
+    if (text.length <= maxLength) {
+      return text;
+    }
+    return '${text.substring(0, maxLength)}...';
+  }
+}
+
+================
+File: lib/screens/admin/admin_appointments_screen.dart
+================
+// lib/screens/admin/admin_appointments_screen.dart
+
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:table_calendar/table_calendar.dart';
+
+import '../../models/appointment_model.dart';
+import '../../services/appointments_service.dart';
+import '../../widgets/loading_overlay.dart';
+
+class AdminAppointmentsScreen extends StatefulWidget {
+  const AdminAppointmentsScreen({super.key});
+
+  @override
+  State<AdminAppointmentsScreen> createState() => _AdminAppointmentsScreenState();
+}
+
+class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
+  bool _isLoading = true;
+  List<AppointmentModel> _appointments = [];
+  DateTime _selectedDay = DateTime.now();
+  final AppointmentsService _appointmentsService = AppointmentsService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAppointmentsForDate(_selectedDay);
+  }
+
+  // Загрузка записей на выбранную дату
+  Future<void> _loadAppointmentsForDate(DateTime date) async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Вызов нового метода в AppointmentsService для получения всех записей на дату
+      final appointments = await _appointmentsService.getAppointmentsForDate(date);
+      
+      setState(() {
+        _appointments = appointments;
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Ошибка при загрузке записей: $e');
+      
+      setState(() {
+        _isLoading = false;
+        _appointments = [];
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при загрузке записей: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
+  // Отмена записи
+  Future<void> _cancelAppointment(AppointmentModel appointment) async {
+    // Подтверждение отмены
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Отмена записи'),
+        content: const Text('Вы уверены, что хотите отменить запись?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Подтвердить'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirmed != true) return;
+    
+    setState(() {
+      _isLoading = true;
+    });
+    
+    try {
+      final success = await _appointmentsService.cancelAppointment(appointment.id);
+      
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Запись успешно отменена'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        // Перезагрузка записей
+        _loadAppointmentsForDate(_selectedDay);
+      } else {
+        throw Exception('Не удалось отменить запись');
+      }
+    } catch (e) {
+      debugPrint('Ошибка при отмене записи: $e');
+      
+      setState(() {
+        _isLoading = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при отмене записи: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
+  // Изменение статуса записи
+  Future<void> _changeAppointmentStatus(AppointmentModel appointment, String newStatus) async {
+    setState(() {
+      _isLoading = true;
+    });
+    
+    try {
+      // Реализуйте метод в AppointmentsService для изменения статуса
+      final success = await _appointmentsService.updateAppointmentStatus(
+        appointment.id, 
+        newStatus
+      );
+      
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Статус записи успешно изменен'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        // Перезагрузка записей
+        _loadAppointmentsForDate(_selectedDay);
+      } else {
+        throw Exception('Не удалось изменить статус записи');
+      }
+    } catch (e) {
+      debugPrint('Ошибка при изменении статуса записи: $e');
+      
+      setState(() {
+        _isLoading = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при изменении статуса: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LoadingOverlay(
+      isLoading: _isLoading,
+      child: Scaffold(
+        body: Column(
+          children: [
+            // Календарь
+            TableCalendar(
+              firstDay: DateTime.now().subtract(const Duration(days: 365)),
+              lastDay: DateTime.now().add(const Duration(days: 365)),
+              focusedDay: _selectedDay,
+              selectedDayPredicate: (day) {
+                return isSameDay(_selectedDay, day);
+              },
+              onDaySelected: (selectedDay, focusedDay) {
+                setState(() {
+                  _selectedDay = selectedDay;
+                });
+                _loadAppointmentsForDate(selectedDay);
+              },
+              calendarFormat: CalendarFormat.week,
+              headerStyle: const HeaderStyle(
+                formatButtonVisible: false,
+                titleCentered: true,
+              ),
+            ),
+            const Divider(),
+            
+            // Список записей
+            Expanded(
+              child: _appointments.isEmpty
+                ? const Center(
+                    child: Text('Нет записей на выбранную дату'),
+                  )
+                : ListView.builder(
+                    itemCount: _appointments.length,
+                    itemBuilder: (context, index) {
+                      final appointment = _appointments[index];
+                      return _buildAppointmentCard(appointment);
+                    },
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Карточка записи
+  Widget _buildAppointmentCard(AppointmentModel appointment) {
+    // Определяем цвет карточки в зависимости от статуса
+    Color statusColor;
+    String statusText;
+    
+    switch (appointment.status) {
+      case 'booked':
+        statusColor = Colors.blue;
+        statusText = 'Забронировано';
+        break;
+      case 'completed':
+        statusColor = Colors.green;
+        statusText = 'Завершено';
+        break;
+      case 'cancelled':
+        statusColor = Colors.red;
+        statusText = 'Отменено';
+        break;
+      case 'no-show':
+        statusColor = Colors.orange;
+        statusText = 'Неявка';
+        break;
+      default:
+        statusColor = Colors.grey;
+        statusText = 'Неизвестно';
+    }
+    
+    // Форматирование даты
+    final DateFormat dateFormat = DateFormat('dd.MM.yyyy');
+    final formattedDate = dateFormat.format(appointment.date);
+    
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Заголовок и статус
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  appointment.serviceName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    statusText,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            
+            // Информация о клиенте и мастере
+            Row(
+              children: [
+                const Icon(Icons.person, size: 16, color: Colors.grey),
+                const SizedBox(width: 8),
+                const Text('Клиент:'),
+                const SizedBox(width: 4),
+                // Здесь должно быть имя клиента, но оно не входит в модель AppointmentModel
+                Text(appointment.clientId),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.person_outline, size: 16, color: Colors.grey),
+                const SizedBox(width: 8),
+                const Text('Мастер:'),
+                const SizedBox(width: 4),
+                Text(appointment.masterName),
+              ],
+            ),
+            const SizedBox(height: 4),
+            
+            // Дата и время
+            Row(
+              children: [
+                const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
+                const SizedBox(width: 8),
+                Text('$formattedDate, ${appointment.startTime} - ${appointment.endTime}'),
+              ],
+            ),
+            const SizedBox(height: 4),
+            
+            // Цена
+            Row(
+              children: [
+                const Icon(Icons.monetization_on, size: 16, color: Colors.grey),
+                const SizedBox(width: 8),
+                Text('${appointment.price} ₸'),
+              ],
+            ),
+            
+            // Примечания
+            if (appointment.notes != null && appointment.notes!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.note, size: 16, color: Colors.grey),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(appointment.notes!),
+                  ),
+                ],
+              ),
+            ],
+            
+            const SizedBox(height: 16),
+            
+            // Кнопки управления
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                // Кнопки в зависимости от статуса
+                if (appointment.status == 'booked') ...[
+                  // Кнопка отметки как "Завершено"
+                  OutlinedButton(
+                    onPressed: () => _changeAppointmentStatus(appointment, 'completed'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.green,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                    child: const Text('Завершено'),
+                  ),
+                  const SizedBox(width: 4),
+                  
+                  // Кнопка отметки как "Неявка"
+                  OutlinedButton(
+                    onPressed: () => _changeAppointmentStatus(appointment, 'no-show'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.orange,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                    child: const Text('Неявка'),
+                  ),
+                  const SizedBox(width: 4),
+                  
+                  // Кнопка отмены
+                  OutlinedButton(
+                    onPressed: () => _cancelAppointment(appointment),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                    child: const Text('Отменить'),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+================
+File: lib/screens/admin/admin_home_screen.dart
+================
+// lib/screens/admin/admin_home_screen.dart
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../l10n/app_localizations.dart';
+import '../../services/auth_service.dart';
+import 'admin_appointments_screen.dart';
+import 'admin_analytics_screen.dart';
+import 'admin_masters_screen.dart';
+import 'admin_services_screen.dart';
+import '../auth/login_screen.dart';
+
+class AdminHomeScreen extends StatefulWidget {
+  const AdminHomeScreen({super.key});
+
+  @override
+  State<AdminHomeScreen> createState() => _AdminHomeScreenState();
+}
+
+class _AdminHomeScreenState extends State<AdminHomeScreen> {
+  int _currentIndex = 0;
+  late PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(initialPage: _currentIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  // Переключение вкладок
+  void _onTabTapped(int index) {
+    setState(() {
+      _currentIndex = index;
+    });
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  // Выход из аккаунта
+  Future<void> _logout() async {
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      await authService.signOut();
+      
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Панель администратора'),
+        automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: _logout,
+            tooltip: 'Выйти',
+          ),
+        ],
+      ),
+      body: PageView(
+        controller: _pageController,
+        onPageChanged: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        children: const [
+          AdminAppointmentsScreen(),
+          AdminMastersScreen(),
+          AdminServicesScreen(),
+          AdminAnalyticsScreen(),
+        ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: _onTabTapped,
+        type: BottomNavigationBarType.fixed,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.calendar_today),
+            label: 'Записи',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.people),
+            label: 'Мастера',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.spa),
+            label: 'Услуги',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.analytics),
+            label: 'Аналитика',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+================
+File: lib/screens/admin/admin_masters_screen.dart
+================
+// lib/screens/admin/admin_masters_screen.dart
+
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+
+import '../../models/master_model.dart';
+import '../../services/masters_service.dart';
+import '../../widgets/loading_overlay.dart';
+import 'edit_master_screen.dart';
+
+class AdminMastersScreen extends StatefulWidget {
+  const AdminMastersScreen({super.key});
+
+  @override
+  State<AdminMastersScreen> createState() => _AdminMastersScreenState();
+}
+
+class _AdminMastersScreenState extends State<AdminMastersScreen> {
+  bool _isLoading = true;
+  List<MasterModel> _masters = [];
+  final MastersService _mastersService = MastersService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMasters();
+  }
+
+  // Загрузка мастеров
+  Future<void> _loadMasters() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final masters = await _mastersService.getAllMasters();
+      
+      setState(() {
+        _masters = masters;
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Ошибка при загрузке мастеров: $e');
+      
+      setState(() {
+        _isLoading = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при загрузке мастеров: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
+  // Добавление или редактирование мастера
+  Future<void> _editMaster(MasterModel? master) async {
+    // Переход на экран редактирования
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => EditMasterScreen(master: master),
+      ),
+    );
+    
+    // Если вернулись с результатом true, обновляем список
+    if (result == true) {
+      _loadMasters();
+    }
+  }
+
+  // Удаление мастера
+  Future<void> _deleteMaster(MasterModel master) async {
+    // Подтверждение удаления
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удаление мастера'),
+        content: Text('Вы уверены, что хотите удалить мастера ${master.displayName}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text(
+              'Удалить',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirmed != true) return;
+    
+    setState(() {
+      _isLoading = true;
+    });
+    
+    try {
+      // Добавить метод для удаления мастера в MastersService
+      final success = await _mastersService.deleteMaster(master.id);
+      
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Мастер успешно удален'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        _loadMasters();
+      } else {
+        throw Exception('Не удалось удалить мастера');
+      }
+    } catch (e) {
+      debugPrint('Ошибка при удалении мастера: $e');
+      
+      setState(() {
+        _isLoading = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при удалении мастера: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
+  // Обновление портфолио мастера
+  Future<void> _updatePortfolio(MasterModel master) async {
+    final ImagePicker picker = ImagePicker();
+    
+    try {
+      // Выбор нескольких изображений
+      final List<XFile> images = await picker.pickMultiImage();
+      
+      if (images.isEmpty) return;
+      
+      setState(() {
+        _isLoading = true;
+      });
+      
+      // Преобразование XFile в File
+      final List<File> files = images.map((xFile) => File(xFile.path)).toList();
+      
+      // Добавить метод для обновления портфолио мастера в MastersService
+      final success = await _mastersService.updateMasterPortfolio(master.id, files);
+      
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Портфолио успешно обновлено'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        _loadMasters();
+      } else {
+        throw Exception('Не удалось обновить портфолио');
+      }
+    } catch (e) {
+      debugPrint('Ошибка при обновлении портфолио: $e');
+      
+      setState(() {
+        _isLoading = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при обновлении портфолио: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LoadingOverlay(
+      isLoading: _isLoading,
+      child: Scaffold(
+        body: _masters.isEmpty && !_isLoading
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.people_outline,
+                      size: 80,
+                      color: Colors.grey,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Мастера не найдены',
+                      style: TextStyle(fontSize: 18),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: () => _editMaster(null),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Добавить мастера'),
+                    ),
+                  ],
+                ),
+              )
+            : RefreshIndicator(
+                onRefresh: _loadMasters,
+                child: ListView.builder(
+                  itemCount: _masters.length,
+                  padding: const EdgeInsets.all(16),
+                  itemBuilder: (context, index) {
+                    final master = _masters[index];
+                    return _buildMasterCard(master);
+                  },
+                ),
+              ),
+        floatingActionButton: _masters.isNotEmpty
+            ? FloatingActionButton(
+                onPressed: () => _editMaster(null),
+                child: const Icon(Icons.add),
+              )
+            : null,
+      ),
+    );
+  }
+
+  // Карточка мастера
+  Widget _buildMasterCard(MasterModel master) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Фото и имя мастера
+            Row(
+              children: [
+                // Фото мастера
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.grey[200],
+                    image: master.photoURL != null
+                        ? DecorationImage(
+                            image: NetworkImage(master.photoURL!),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                  ),
+                  child: master.photoURL == null
+                      ? const Icon(Icons.person, size: 40, color: Colors.grey)
+                      : null,
+                ),
+                const SizedBox(width: 16),
+                
+                // Информация о мастере
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        master.displayName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        master.specializations.join(', '),
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.star, color: Colors.amber, size: 16),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${master.rating.toStringAsFixed(1)} (${master.reviewsCount} отзывов)',
+                            style: TextStyle(
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Информация о портфолио
+            if (master.portfolio.isNotEmpty) ...[
+              Text(
+                'Портфолио: ${master.portfolio.length} фото',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 60,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: master.portfolio.length,
+                  itemBuilder: (context, index) {
+                    return Container(
+                      width: 60,
+                      height: 60,
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        image: DecorationImage(
+                          image: NetworkImage(master.portfolio[index]),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ] else ...[
+              const Text(
+                'Портфолио: нет фотографий',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            
+            // Кнопки действий
+            Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              alignment: WrapAlignment.end,
+              children: [
+                // Кнопка обновления портфолио
+                OutlinedButton.icon(
+                  onPressed: () => _updatePortfolio(master),
+                  icon: const Icon(Icons.photo_library),
+                  label: const Text('Портфолио'),
+                ),
+                const SizedBox(width: 8),
+                
+                // Кнопка редактирования
+                OutlinedButton.icon(
+                  onPressed: () => _editMaster(master),
+                  icon: const Icon(Icons.edit),
+                  label: const Text('Изменить'),
+                ),
+                const SizedBox(width: 8),
+                
+                // Кнопка удаления
+                OutlinedButton.icon(
+                  onPressed: () => _deleteMaster(master),
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  label: const Text(
+                    'Удалить',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+================
+File: lib/screens/admin/admin_services_screen.dart
+================
+// lib/screens/admin/admin_services_screen.dart
+
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+
+import '../../models/service_model.dart';
+import '../../models/category_model.dart';
+import '../../services/services_service.dart';
+import '../../widgets/loading_overlay.dart';
+import 'edit_service_screen.dart';
+
+class AdminServicesScreen extends StatefulWidget {
+  const AdminServicesScreen({super.key});
+
+  @override
+  State<AdminServicesScreen> createState() => _AdminServicesScreenState();
+}
+
+class _AdminServicesScreenState extends State<AdminServicesScreen> with SingleTickerProviderStateMixin {
+  bool _isLoading = true;
+  List<ServiceModel> _services = [];
+  List<CategoryModel> _categories = [];
+  late TabController _tabController;
+  
+  final ServicesService _servicesService = ServicesService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+  
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  // Загрузка категорий и услуг
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Загружаем категории
+      final categories = await _servicesService.getCategories();
+      
+      // Загружаем все услуги
+      final services = await _servicesService.getAllServices();
+      
+      setState(() {
+        _categories = categories;
+        _services = services;
+        
+        // Инициализируем TabController после загрузки категорий
+        _tabController = TabController(length: categories.length, vsync: this);
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Ошибка при загрузке данных: $e');
+      
+      setState(() {
+        // Создаем хотя бы одну категорию "Все услуги", если загрузка не удалась
+        _categories = [
+          CategoryModel(
+            id: '1',
+            name: {'ru': 'Все услуги', 'kk': 'Барлық қызметтер', 'en': 'All services'},
+            description: {'ru': '', 'kk': '', 'en': ''},
+            order: 0,
+          ),
+        ];
+        
+        _services = [];
+        _tabController = TabController(length: _categories.length, vsync: this);
+        _isLoading = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при загрузке данных: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
+  // Добавление или редактирование услуги
+  Future<void> _editService(ServiceModel? service) async {
+    // Переход на экран редактирования
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => EditServiceScreen(
+          service: service,
+          categories: _categories,
+        ),
+      ),
+    );
+    
+    // Если вернулись с результатом true, обновляем список
+    if (result == true) {
+      _loadData();
+    }
+  }
+
+  // Удаление услуги
+  Future<void> _deleteService(ServiceModel service) async {
+    // Подтверждение удаления
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удаление услуги'),
+        content: Text('Вы уверены, что хотите удалить услугу "${service.name['ru']}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text(
+              'Удалить',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirmed != true) return;
+    
+    setState(() {
+      _isLoading = true;
+    });
+    
+    try {
+      final success = await _servicesService.deleteService(service.id);
+      
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Услуга успешно удалена'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        _loadData();
+      } else {
+        throw Exception('Не удалось удалить услугу');
+      }
+    } catch (e) {
+      debugPrint('Ошибка при удалении услуги: $e');
+      
+      setState(() {
+        _isLoading = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при удалении услуги: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
+  // Обновление фото услуги
+  Future<void> _updateServicePhoto(ServiceModel service) async {
+    final ImagePicker picker = ImagePicker();
+    
+    try {
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 800,
+        maxHeight: 800,
+      );
+      
+      if (image == null) return;
+      
+      setState(() {
+        _isLoading = true;
+      });
+      
+      final File file = File(image.path);
+      
+      final success = await _servicesService.updateServicePhoto(service.id, file);
+      
+      if (success != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Фото услуги успешно обновлено'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        _loadData();
+      } else {
+        throw Exception('Не удалось обновить фото услуги');
+      }
+    } catch (e) {
+      debugPrint('Ошибка при обновлении фото услуги: $e');
+      
+      setState(() {
+        _isLoading = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при обновлении фото: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LoadingOverlay(
+      isLoading: _isLoading,
+      child: Scaffold(
+        body: _categories.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.spa_outlined,
+                      size: 80,
+                      color: Colors.grey,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Нет доступных категорий',
+                      style: TextStyle(fontSize: 18),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: _loadData,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Обновить'),
+                    ),
+                  ],
+                ),
+              )
+            : Column(
+                children: [
+                  // Табы с категориями
+                  TabBar(
+                    controller: _tabController,
+                    isScrollable: true,
+                    tabs: _categories.map((category) {
+                      return Tab(text: category.name['ru'] ?? '');
+                    }).toList(),
+                  ),
+                  
+                  // Список услуг в зависимости от выбранной категории
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: _categories.map((category) {
+                        // Фильтруем услуги по категории или показываем все для первой категории
+                        final categoryServices = category.id == '1'
+                            ? _services
+                            : _services.where((service) => service.category == category.id).toList();
+                            
+                        if (categoryServices.isEmpty) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.spa_outlined,
+                                  size: 60,
+                                  color: Colors.grey,
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Услуги не найдены',
+                                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                        
+                        return ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: categoryServices.length,
+                          itemBuilder: (context, index) {
+                            final service = categoryServices[index];
+                            return _buildServiceCard(service);
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () => _editService(null),
+          child: const Icon(Icons.add),
+        ),
+      ),
+    );
+  }
+
+  // Карточка услуги
+  Widget _buildServiceCard(ServiceModel service) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Верхняя часть с фото и информацией
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Фото услуги
+                GestureDetector(
+                  onTap: () => _updateServicePhoto(service),
+                  child: Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      color: Colors.grey[200],
+                      image: service.photoURL != null
+                          ? DecorationImage(
+                              image: NetworkImage(service.photoURL!),
+                              fit: BoxFit.cover,
+                            )
+                          : null,
+                    ),
+                    child: service.photoURL == null
+                        ? const Icon(Icons.add_photo_alternate, size: 40, color: Colors.grey)
+                        : null,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                
+                // Информация об услуге
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        service.name['ru'] ?? '',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      // Категория
+                      Text(
+                        'Категория: ${_getCategoryName(service.category)}',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      // Цена и продолжительность
+                      Row(
+                        children: [
+                          Text(
+                            '${service.price} ₸',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Text(
+                            '${service.duration} мин',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Короткое описание
+            Text(
+              service.description['ru'] ?? '',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 16),
+            
+            // Кнопки действий
+            Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              alignment: WrapAlignment.end,
+              children: [
+                // Кнопка обновления фото
+                OutlinedButton.icon(
+                  onPressed: () => _updateServicePhoto(service),
+                  icon: const Icon(Icons.photo_library),
+                  label: const Text('Фото'),
+                ),
+                const SizedBox(width: 8),
+                
+                // Кнопка редактирования
+                OutlinedButton.icon(
+                  onPressed: () => _editService(service),
+                  icon: const Icon(Icons.edit),
+                  label: const Text('Изменить'),
+                ),
+                const SizedBox(width: 8),
+                
+                // Кнопка удаления
+                OutlinedButton.icon(
+                  onPressed: () => _deleteService(service),
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  label: const Text(
+                    'Удалить',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  // Получение названия категории по ID
+  String _getCategoryName(String categoryId) {
+    final category = _categories.firstWhere(
+      (category) => category.id == categoryId,
+      orElse: () => CategoryModel(
+        id: '0',
+        name: {'ru': 'Неизвестно', 'kk': 'Белгісіз', 'en': 'Unknown'},
+        description: {'ru': '', 'kk': '', 'en': ''},
+        order: 0,
+      ),
+    );
+    
+    return category.name['ru'] ?? '';
+  }
+}
+
+================
+File: lib/screens/admin/edit_master_screen.dart
+================
+// lib/screens/admin/edit_master_screen.dart
+
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+
+import '../../models/master_model.dart';
+import '../../services/masters_service.dart';
+import '../../widgets/loading_overlay.dart';
+
+class EditMasterScreen extends StatefulWidget {
+  final MasterModel? master; // Если null, то создание нового мастера
+
+  const EditMasterScreen({super.key, this.master});
+
+  @override
+  State<EditMasterScreen> createState() => _EditMasterScreenState();
+}
+
+class _EditMasterScreenState extends State<EditMasterScreen> {
+  final _formKey = GlobalKey<FormState>();
+  
+  // Контроллеры для полей формы
+  final _nameController = TextEditingController();
+  final _experienceController = TextEditingController();
+  final _descriptionRuController = TextEditingController();
+  final _descriptionKkController = TextEditingController();
+  final _descriptionEnController = TextEditingController();
+  
+  // Переменные для выбранных специализаций и фото
+  List<String> _selectedSpecializations = [];
+  File? _selectedPhoto;
+  String? _currentPhotoURL;
+  
+  // Список доступных специализаций
+  final List<String> _availableSpecializations = [
+    'Парикмахер',
+    'Колорист',
+    'Стилист',
+    'Визажист',
+    'Мастер маникюра',
+    'Мастер педикюра',
+    'Барбер',
+    'Мастер по бровям',
+    'Лешмейкер',
+  ];
+  
+  bool _isLoading = false;
+  final MastersService _mastersService = MastersService();
+  
+  @override
+  void initState() {
+    super.initState();
+    _initFormData();
+  }
+  
+  // Инициализация данных формы
+  void _initFormData() {
+    if (widget.master != null) {
+      // Заполнение формы данными существующего мастера
+      _nameController.text = widget.master!.displayName;
+      _experienceController.text = widget.master!.experience;
+      _descriptionRuController.text = widget.master!.description['ru'] ?? '';
+      _descriptionKkController.text = widget.master!.description['kk'] ?? '';
+      _descriptionEnController.text = widget.master!.description['en'] ?? '';
+      _selectedSpecializations = List<String>.from(widget.master!.specializations);
+      _currentPhotoURL = widget.master!.photoURL;
+    }
+  }
+  
+  @override
+  void dispose() {
+    // Освобождение ресурсов
+    _nameController.dispose();
+    _experienceController.dispose();
+    _descriptionRuController.dispose();
+    _descriptionKkController.dispose();
+    _descriptionEnController.dispose();
+    super.dispose();
+  }
+  
+  // Выбор фото из галереи
+  Future<void> _pickImage() async {
+    final ImagePicker picker = ImagePicker();
+    
+    try {
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 800,
+        maxHeight: 800,
+      );
+      
+      if (image != null) {
+        setState(() {
+          _selectedPhoto = File(image.path);
+        });
+      }
+    } catch (e) {
+      debugPrint('Ошибка при выборе изображения: $e');
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при выборе изображения: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+  
+  // Сохранение данных мастера
+  Future<void> _saveMaster() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    
+    setState(() {
+      _isLoading = true;
+    });
+    
+    try {
+      // Создание Map с описанием на разных языках
+      final Map<String, String> description = {
+        'ru': _descriptionRuController.text.trim(),
+        'kk': _descriptionKkController.text.trim(),
+        'en': _descriptionEnController.text.trim(),
+      };
+      
+      if (widget.master == null) {
+        // Создание нового мастера
+        await _mastersService.createMaster(
+          displayName: _nameController.text.trim(),
+          experience: _experienceController.text.trim(),
+          description: description,
+          specializations: _selectedSpecializations,
+          photoFile: _selectedPhoto,
+        );
+      } else {
+        // Обновление существующего мастера
+        await _mastersService.updateMaster(
+          masterId: widget.master!.id,
+          displayName: _nameController.text.trim(),
+          experience: _experienceController.text.trim(),
+          description: description,
+          specializations: _selectedSpecializations,
+          photoFile: _selectedPhoto,
+          currentPhotoBase64: _currentPhotoURL,
+        );
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Мастер успешно сохранен'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        Navigator.of(context).pop(true); // Возвращаемся с результатом true
+      }
+    } catch (e) {
+      debugPrint('Ошибка при сохранении мастера: $e');
+      
+      setState(() {
+        _isLoading = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при сохранении мастера: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return LoadingOverlay(
+      isLoading: _isLoading,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(widget.master == null ? 'Добавление мастера' : 'Редактирование мастера'),
+        ),
+        body: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Фото мастера
+                Center(
+                  child: Column(
+                    children: [
+                      GestureDetector(
+                        onTap: _pickImage,
+                        child: Container(
+                          width: 120,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.grey[200],
+                            image: _selectedPhoto != null
+                                ? DecorationImage(
+                                    image: FileImage(_selectedPhoto!),
+                                    fit: BoxFit.cover,
+                                  )
+                                : (_currentPhotoURL != null
+                                    ? DecorationImage(
+                                        image: NetworkImage(_currentPhotoURL!),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null),
+                          ),
+                          child: (_selectedPhoto == null && _currentPhotoURL == null)
+                              ? const Icon(Icons.add_a_photo, size: 40, color: Colors.grey)
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: _pickImage,
+                        child: const Text('Выбрать фото'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                
+                // Имя мастера
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Имя мастера',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Пожалуйста, введите имя мастера';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                
+                // Опыт работы
+                TextFormField(
+                  controller: _experienceController,
+                  decoration: const InputDecoration(
+                    labelText: 'Опыт работы',
+                    border: OutlineInputBorder(),
+                    hintText: 'Например: 5 лет',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Пожалуйста, введите опыт работы';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                
+                // Специализации
+                const Text(
+                  'Специализации:',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8.0,
+                  runSpacing: 4.0,
+                  children: _availableSpecializations.map((specialization) {
+                    final isSelected = _selectedSpecializations.contains(specialization);
+                    return FilterChip(
+                      label: Text(specialization),
+                      selected: isSelected,
+                      onSelected: (selected) {
+                        setState(() {
+                          if (selected) {
+                            _selectedSpecializations.add(specialization);
+                          } else {
+                            _selectedSpecializations.remove(specialization);
+                          }
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+                if (_selectedSpecializations.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      'Выберите хотя бы одну специализацию',
+                      style: TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ),
+                const SizedBox(height: 24),
+                
+                // Описание на русском
+                TextFormField(
+                  controller: _descriptionRuController,
+                  decoration: const InputDecoration(
+                    labelText: 'Описание (Русский)',
+                    border: OutlineInputBorder(),
+                    alignLabelWithHint: true,
+                  ),
+                  maxLines: 3,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Пожалуйста, введите описание на русском языке';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                
+                // Описание на казахском
+                TextFormField(
+                  controller: _descriptionKkController,
+                  decoration: const InputDecoration(
+                    labelText: 'Описание (Қазақша)',
+                    border: OutlineInputBorder(),
+                    alignLabelWithHint: true,
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 16),
+                
+                // Описание на английском
+                TextFormField(
+                  controller: _descriptionEnController,
+                  decoration: const InputDecoration(
+                    labelText: 'Описание (English)',
+                    border: OutlineInputBorder(),
+                    alignLabelWithHint: true,
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 24),
+                
+                // Кнопка сохранения
+                Center(
+                  child: ElevatedButton(
+                    onPressed: _selectedSpecializations.isNotEmpty ? _saveMaster : null,
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
+                    ),
+                    child: const Text('Сохранить'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+================
+File: lib/screens/admin/edit_service_screen.dart
+================
+// lib/screens/admin/edit_service_screen.dart
+
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+
+import '../../models/service_model.dart';
+import '../../models/category_model.dart';
+import '../../services/services_service.dart';
+import '../../widgets/loading_overlay.dart';
+
+class EditServiceScreen extends StatefulWidget {
+  final ServiceModel? service;  // Если null, то создание новой услуги
+  final List<CategoryModel> categories;
+
+  const EditServiceScreen({
+    super.key, 
+    this.service,
+    required this.categories,
+  });
+
+  @override
+  State<EditServiceScreen> createState() => _EditServiceScreenState();
+}
+
+class _EditServiceScreenState extends State<EditServiceScreen> {
+  final _formKey = GlobalKey<FormState>();
+  
+  // Контроллеры для полей формы
+  final _nameRuController = TextEditingController();
+  final _nameKkController = TextEditingController();
+  final _nameEnController = TextEditingController();
+  final _descriptionRuController = TextEditingController();
+  final _descriptionKkController = TextEditingController();
+  final _descriptionEnController = TextEditingController();
+  final _priceController = TextEditingController();
+  final _durationController = TextEditingController();
+  
+  // Выбранная категория
+  String? _selectedCategoryId;
+  File? _selectedPhoto;
+  String? _currentPhotoURL;
+  bool _isActive = true;
+  
+  bool _isLoading = false;
+  final ServicesService _servicesService = ServicesService();
+  
+  @override
+  void initState() {
+    super.initState();
+    _initFormData();
+  }
+  
+  // Инициализация данных формы
+  void _initFormData() {
+    if (widget.service != null) {
+      // Заполнение формы данными существующей услуги
+      _nameRuController.text = widget.service!.name['ru'] ?? '';
+      _nameKkController.text = widget.service!.name['kk'] ?? '';
+      _nameEnController.text = widget.service!.name['en'] ?? '';
+      _descriptionRuController.text = widget.service!.description['ru'] ?? '';
+      _descriptionKkController.text = widget.service!.description['kk'] ?? '';
+      _descriptionEnController.text = widget.service!.description['en'] ?? '';
+      _priceController.text = widget.service!.price.toString();
+      _durationController.text = widget.service!.duration.toString();
+      _selectedCategoryId = widget.service!.category;
+      _currentPhotoURL = widget.service!.photoURL;
+      _isActive = widget.service!.isActive;
+    } else if (widget.categories.isNotEmpty) {
+      // Установка категории по умолчанию для новой услуги
+      _selectedCategoryId = widget.categories[0].id;
+    }
+  }
+  
+  @override
+  void dispose() {
+    // Освобождение ресурсов
+    _nameRuController.dispose();
+    _nameKkController.dispose();
+    _nameEnController.dispose();
+    _descriptionRuController.dispose();
+    _descriptionKkController.dispose();
+    _descriptionEnController.dispose();
+    _priceController.dispose();
+    _durationController.dispose();
+    super.dispose();
+  }
+  
+  // Выбор фото из галереи
+  Future<void> _pickImage() async {
+    final ImagePicker picker = ImagePicker();
+    
+    try {
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 800,
+        maxHeight: 800,
+      );
+      
+      if (image != null) {
+        setState(() {
+          _selectedPhoto = File(image.path);
+        });
+      }
+    } catch (e) {
+      debugPrint('Ошибка при выборе изображения: $e');
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при выборе изображения: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+  
+  // Сохранение данных услуги
+  Future<void> _saveService() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    
+    if (_selectedCategoryId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Пожалуйста, выберите категорию'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    setState(() {
+      _isLoading = true;
+    });
+    
+    try {
+      // Создание Map с именем на разных языках
+      final Map<String, String> name = {
+        'ru': _nameRuController.text.trim(),
+        'kk': _nameKkController.text.trim(),
+        'en': _nameEnController.text.trim(),
+      };
+      
+      // Создание Map с описанием на разных языках
+      final Map<String, String> description = {
+        'ru': _descriptionRuController.text.trim(),
+        'kk': _descriptionKkController.text.trim(),
+        'en': _descriptionEnController.text.trim(),
+      };
+      
+      // Чтение цены и продолжительности
+      final int price = int.tryParse(_priceController.text.trim()) ?? 0;
+      final int duration = int.tryParse(_durationController.text.trim()) ?? 60;
+      
+      if (widget.service == null) {
+        // Создание новой услуги
+        await _servicesService.createService(
+          name: name,
+          description: description,
+          category: _selectedCategoryId!,
+          price: price,
+          duration: duration,
+          photoFile: _selectedPhoto,
+          isActive: _isActive,
+        );
+      } else {
+        // Обновление существующей услуги
+        await _servicesService.updateService(
+          serviceId: widget.service!.id,
+          name: name,
+          description: description,
+          category: _selectedCategoryId!,
+          price: price,
+          duration: duration,
+          photoFile: _selectedPhoto,
+          currentPhotoURL: _currentPhotoURL,
+          isActive: _isActive,
+        );
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Услуга успешно сохранена'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        Navigator.of(context).pop(true); // Возвращаемся с результатом true
+      }
+    } catch (e) {
+      debugPrint('Ошибка при сохранении услуги: $e');
+      
+      setState(() {
+        _isLoading = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при сохранении услуги: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return LoadingOverlay(
+      isLoading: _isLoading,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(widget.service == null ? 'Добавление услуги' : 'Редактирование услуги'),
+        ),
+        body: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Фото услуги
+                Center(
+                  child: Column(
+                    children: [
+                      GestureDetector(
+                        onTap: _pickImage,
+                        child: Container(
+                          width: 150,
+                          height: 150,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.grey[200],
+                            image: _selectedPhoto != null
+                                ? DecorationImage(
+                                    image: FileImage(_selectedPhoto!),
+                                    fit: BoxFit.cover,
+                                  )
+                                : (_currentPhotoURL != null
+                                    ? DecorationImage(
+                                        image: NetworkImage(_currentPhotoURL!),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null),
+                          ),
+                          child: (_selectedPhoto == null && _currentPhotoURL == null)
+                              ? const Icon(Icons.add_photo_alternate, size: 60, color: Colors.grey)
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: _pickImage,
+                        child: const Text('Выбрать фото'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                
+                // Выбор категории
+                DropdownButtonFormField<String>(
+                  value: _selectedCategoryId,
+                  decoration: const InputDecoration(
+                    labelText: 'Категория',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: widget.categories.map((category) {
+                    return DropdownMenuItem<String>(
+                      value: category.id,
+                      child: Text(category.name['ru'] ?? ''),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedCategoryId = value;
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+                
+                // Название на русском (обязательное)
+                TextFormField(
+                  controller: _nameRuController,
+                  decoration: const InputDecoration(
+                    labelText: 'Название (Русский)',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Пожалуйста, введите название услуги';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                
+                // Название на казахском
+                TextFormField(
+                  controller: _nameKkController,
+                  decoration: const InputDecoration(
+                    labelText: 'Название (Қазақша)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                
+                // Название на английском
+                TextFormField(
+                  controller: _nameEnController,
+                  decoration: const InputDecoration(
+                    labelText: 'Название (English)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                
+                // Цена и продолжительность в одном ряду
+                Row(
+                  children: [
+                    // Цена
+                    Expanded(
+                      child: TextFormField(
+                        controller: _priceController,
+                        decoration: const InputDecoration(
+                          labelText: 'Цена (₸)',
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.number,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Введите цену';
+                          }
+                          if (int.tryParse(value) == null) {
+                            return 'Цена должна быть числом';
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    
+                    // Продолжительность
+                    Expanded(
+                      child: TextFormField(
+                        controller: _durationController,
+                        decoration: const InputDecoration(
+                          labelText: 'Длительность (мин)',
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.number,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Введите время';
+                          }
+                          if (int.tryParse(value) == null) {
+                            return 'Должно быть числом';
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                
+                // Описание на русском (обязательное)
+                TextFormField(
+                  controller: _descriptionRuController,
+                  decoration: const InputDecoration(
+                    labelText: 'Описание (Русский)',
+                    border: OutlineInputBorder(),
+                    alignLabelWithHint: true,
+                  ),
+                  maxLines: 3,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Пожалуйста, введите описание услуги';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                
+                // Описание на казахском
+                TextFormField(
+                  controller: _descriptionKkController,
+                  decoration: const InputDecoration(
+                    labelText: 'Описание (Қазақша)',
+                    border: OutlineInputBorder(),
+                    alignLabelWithHint: true,
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 16),
+                
+                // Описание на английском
+                TextFormField(
+                  controller: _descriptionEnController,
+                  decoration: const InputDecoration(
+                    labelText: 'Описание (English)',
+                    border: OutlineInputBorder(),
+                    alignLabelWithHint: true,
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 16),
+                
+                // Чекбокс активности услуги
+                CheckboxListTile(
+                  title: const Text('Активна'),
+                  subtitle: const Text('Отображать услугу в приложении'),
+                  value: _isActive,
+                  onChanged: (value) {
+                    setState(() {
+                      _isActive = value ?? true;
+                    });
+                  },
+                ),
+                const SizedBox(height: 24),
+                
+                // Кнопка сохранения
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _saveService,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: const Text('Сохранить'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -2,6 +2,7 @@
 
 import 'dart:io';
 
+import 'package:beauty_salon_app/services/image_upload_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
@@ -10,6 +11,7 @@ import '../models/master_model.dart';
 
 class MastersService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final ImageUploadService _imageUploadService = ImageUploadService();
   
   // Получение всех мастеров
   Future<List<MasterModel>> getAllMasters() async {
@@ -275,7 +277,7 @@ class MastersService {
 
   // Добавьте эти методы в класс MastersService в файле lib/services/masters_service.dart
 
-  // Создание нового мастера
+    // Modified method for creating a master with base64 photo
   Future<String?> createMaster({
     required String displayName,
     required String experience,
@@ -284,16 +286,16 @@ class MastersService {
     File? photoFile,
   }) async {
     try {
-      // Создаем пользователя для мастера в auth
+      // Create a user ID for the master
       final String userId = 'master-${DateTime.now().millisecondsSinceEpoch}';
       
-      // Загружаем фото, если оно есть
-      String? photoURL;
+      // Convert photo to base64 if provided
+      String? photoBase64;
       if (photoFile != null) {
-        photoURL = await _uploadMasterPhoto(photoFile, userId);
+        photoBase64 = await _imageUploadService.uploadImage(photoFile, 'masters');
       }
       
-      // Создаем расписание по умолчанию (можно настроить позже)
+      // Create default schedule (can be configured later)
       final Map<String, DaySchedule> defaultSchedule = {
         'monday': DaySchedule(start: '09:00', end: '18:00', breaks: [TimeBreak(start: '13:00', end: '14:00')]),
         'tuesday': DaySchedule(start: '09:00', end: '18:00', breaks: [TimeBreak(start: '13:00', end: '14:00')]),
@@ -303,21 +305,21 @@ class MastersService {
         'saturday': DaySchedule(start: '10:00', end: '16:00', breaks: []),
       };
       
-      // Создаем данные мастера
+      // Create master data
       final masterData = {
         'userId': userId,
         'displayName': displayName,
         'specializations': specializations,
         'experience': experience,
         'description': description,
-        'photoURL': photoURL,
-        'portfolio': [],
+        'photoBase64': photoBase64, // Changed from photoURL to photoBase64
+        'portfolio': [], // Will now store base64 strings instead of URLs
         'schedule': _scheduleToMap(defaultSchedule),
         'rating': 0.0,
         'reviewsCount': 0,
       };
       
-      // Сохраняем в Firestore
+      // Save to Firestore
       final DocumentReference docRef = await _firestore
           .collection('masters')
           .add(masterData);
@@ -325,13 +327,13 @@ class MastersService {
       return docRef.id;
     } catch (e) {
       if (kDebugMode) {
-        print('Ошибка при создании мастера: $e');
+        print('Error creating master: $e');
       }
       return null;
     }
   }
   
-  // Обновление данных мастера
+  // Update master data with base64 photo
   Future<bool> updateMaster({
     required String masterId,
     required String displayName,
@@ -339,29 +341,29 @@ class MastersService {
     required Map<String, String> description,
     required List<String> specializations,
     File? photoFile,
-    String? currentPhotoURL,
+    String? currentPhotoBase64, // Changed from currentPhotoURL
   }) async {
     try {
-      // Получаем текущие данные мастера
+      // Get current master data
       final DocumentSnapshot doc = await _firestore
           .collection('masters')
           .doc(masterId)
           .get();
       
       if (!doc.exists) {
-        throw Exception('Мастер не найден');
+        throw Exception('Master not found');
       }
       
       final masterData = doc.data() as Map<String, dynamic>;
       final String userId = masterData['userId'] as String;
       
-      // Загружаем новое фото, если оно выбрано
-      String? photoURL = currentPhotoURL;
+      // Upload new photo as base64 if selected
+      String? photoBase64 = currentPhotoBase64;
       if (photoFile != null) {
-        photoURL = await _uploadMasterPhoto(photoFile, userId);
+        photoBase64 = await _imageUploadService.uploadImage(photoFile, 'masters');
       }
       
-      // Обновляем данные мастера
+      // Update master data
       await _firestore
           .collection('masters')
           .doc(masterId)
@@ -370,17 +372,64 @@ class MastersService {
             'specializations': specializations,
             'experience': experience,
             'description': description,
-            'photoURL': photoURL,
+            'photoBase64': photoBase64, // Changed from photoURL
           });
       
       return true;
     } catch (e) {
       if (kDebugMode) {
-        print('Ошибка при обновлении мастера: $e');
+        print('Error updating master: $e');
       }
       return false;
     }
   }
+  
+  // Update master's portfolio using base64 photos
+  Future<bool> updateMasterPortfolio(String masterId, List<File> photos) async {
+    try {
+      // Get current master data
+      final DocumentSnapshot doc = await _firestore
+          .collection('masters')
+          .doc(masterId)
+          .get();
+      
+      if (!doc.exists) {
+        throw Exception('Master not found');
+      }
+      
+      final masterData = doc.data() as Map<String, dynamic>;
+      final String userId = masterData['userId'] as String;
+      final List<dynamic> currentPortfolio = List<dynamic>.from(masterData['portfolio'] ?? []);
+      
+      // Convert photos to base64
+      final List<String> newPhotosBase64 = await _imageUploadService.uploadMultipleImages(
+        photos, 
+        'masters'
+      );
+      
+      // Combine with current portfolio
+      final List<String> updatedPortfolio = [...currentPortfolio.cast<String>(), ...newPhotosBase64];
+      
+      // Update master data
+      await _firestore
+          .collection('masters')
+          .doc(masterId)
+          .update({
+            'portfolio': updatedPortfolio,
+          });
+      
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error updating portfolio: $e');
+      }
+      return false;
+    }
+  }
+  
+  // The rest of the file remains unchanged
+  // ...
+
   
   // Удаление мастера
   Future<bool> deleteMaster(String masterId) async {
@@ -410,51 +459,7 @@ class MastersService {
     }
   }
   
-  // Обновление портфолио мастера
-  Future<bool> updateMasterPortfolio(String masterId, List<File> photos) async {
-    try {
-      // Получаем текущие данные мастера
-      final DocumentSnapshot doc = await _firestore
-          .collection('masters')
-          .doc(masterId)
-          .get();
-      
-      if (!doc.exists) {
-        throw Exception('Мастер не найден');
-      }
-      
-      final masterData = doc.data() as Map<String, dynamic>;
-      final String userId = masterData['userId'] as String;
-      final List<String> currentPortfolio = List<String>.from(masterData['portfolio'] ?? []);
-      
-      // Загружаем новые фото
-      final List<String> newPhotos = [];
-      for (final file in photos) {
-        final photoURL = await _uploadPortfolioPhoto(file, userId);
-        if (photoURL != null) {
-          newPhotos.add(photoURL);
-        }
-      }
-      
-      // Объединяем с текущим портфолио
-      final List<String> updatedPortfolio = [...currentPortfolio, ...newPhotos];
-      
-      // Обновляем данные мастера
-      await _firestore
-          .collection('masters')
-          .doc(masterId)
-          .update({
-            'portfolio': updatedPortfolio,
-          });
-      
-      return true;
-    } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка при обновлении портфолио: $e');
-      }
-      return false;
-    }
-  }
+  
   
   // Загрузка фото мастера в Storage
   Future<String?> _uploadMasterPhoto(File file, String userId) async {

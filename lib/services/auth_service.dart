@@ -139,45 +139,28 @@ class AuthService with ChangeNotifier {
     String? displayName,
     String? phoneNumber,
     String? language,
-    String? photoURL,
+    String? photoBase64, // Changed from photoURL
   }) async {
-    if (_auth.currentUser == null || _currentUserModel == null) {
-      throw 'Пользователь не авторизован';
-    }
-    
     try {
-      // Обновление данных в Firebase Auth
-      if (displayName != null) {
-        await _auth.currentUser!.updateDisplayName(displayName);
-      }
-      
-      // Обновление фото в Firebase Auth
-      if (photoURL != null) {
-        await _auth.currentUser!.updatePhotoURL(photoURL);
-      }
-      
-      // Обновление данных в Firestore
-      final Map<String, dynamic> updates = {};
-      if (displayName != null) updates['displayName'] = displayName;
-      if (phoneNumber != null) updates['phoneNumber'] = phoneNumber;
-      if (language != null) updates['language'] = language;
-      if (photoURL != null) updates['photoURL'] = photoURL;
-      
-      await _firestore.collection('users')
-          .doc(_auth.currentUser!.uid)
-          .update(updates);
-      
-      // Обновление локальной модели
-      _currentUserModel = _currentUserModel!.copyWith(
-        displayName: displayName,
-        phoneNumber: phoneNumber,
-        language: language,
-        photoURL: photoURL,
-      );
-      
-      notifyListeners();
+      final user = _auth.currentUser;
+      if (user == null) throw Exception('No authenticated user');
+
+      final Map<String, dynamic> updateData = {};
+      if (displayName != null) updateData['displayName'] = displayName;
+      if (phoneNumber != null) updateData['phoneNumber'] = phoneNumber;
+      if (language != null) updateData['language'] = language;
+      if (photoBase64 != null) updateData['photoBase64'] = photoBase64;
+
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .update(updateData);
+
+      // Refresh user data
+      await _fetchUserModel(user.uid);
     } catch (e) {
-      throw 'Ошибка при обновлении профиля: $e';
+      debugPrint('Error updating user profile: $e');
+      rethrow;
     }
   }
   
@@ -196,7 +179,7 @@ class AuthService with ChangeNotifier {
           displayName: user.displayName ?? '',
           email: user.email ?? '',
           phoneNumber: user.phoneNumber ?? '',
-          photoURL: user.photoURL,
+          photoBase64: user.photoURL,
           role: 'client',
           language: 'ru',
           createdAt: DateTime.now(),

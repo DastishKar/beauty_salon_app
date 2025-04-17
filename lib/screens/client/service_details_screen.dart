@@ -1,7 +1,9 @@
 // lib/screens/client/service_details_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
+import 'dart:convert';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/service_model.dart';
@@ -30,23 +32,23 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   bool _isLoading = false;
   List<MasterModel> _availableMasters = [];
   final bool _imageHasError = false;
-  
+
   @override
   void initState() {
     super.initState();
     _loadMasters();
   }
-  
+
   // Загрузка мастеров, которые выполняют данную услугу
   Future<void> _loadMasters() async {
     setState(() {
       _isLoading = true;
     });
-  
+
     try {
       final mastersService = MastersService();
       final masters = await mastersService.getMastersByService(widget.service.id);
-      
+
       if (mounted) {
         setState(() {
           _availableMasters = masters;
@@ -73,7 +75,15 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     final languageCode = Provider.of<LanguageService>(context).languageCode;
-    
+
+    if (kDebugMode) {
+      print('Building service details for service: ${widget.service.id}');
+      print('photoBase64 available: ${widget.service.photoBase64 != null}');
+      if (widget.service.photoBase64 != null) {
+        print('photoBase64 length: ${widget.service.photoBase64!.length}');
+      }
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.service.getLocalizedName(languageCode)),
@@ -85,42 +95,17 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Изображение услуги
-                  Container(
-                    height: 200,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
-                      borderRadius: BorderRadius.circular(16),
-                      image: widget.service.photoURL != null
-                        ? DecorationImage(
-                            image: NetworkImage(widget.service.photoURL!),
-                            fit: BoxFit.cover,
-                            onError: (exception, stackTrace) {
-                              // Просто обрабатываем ошибку - не возвращаем виджет!
-                              debugPrint('Error loading image: $exception');
-                            },
-                          )
-                        : null,
-                    ),
-                    alignment: Alignment.center,
-                    child: (widget.service.photoURL == null) || _imageHasError
-                      ? Icon(
-                          Icons.spa,
-                          size: 80,
-                          color: Theme.of(context).primaryColor,
-                        )
-                      : null,
-                  ),
+                  // Service image with error handling
+                  _buildServiceImage(context),
                   const SizedBox(height: 20),
-                  
+
                   // Название и информация
                   Text(
                     widget.service.getLocalizedName(languageCode),
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
                   const SizedBox(height: 8),
-                  
+
                   // Цена и продолжительность
                   Row(
                     children: [
@@ -155,7 +140,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  
+
                   // Описание
                   Text(
                     localizations.translate('description'),
@@ -167,7 +152,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 24),
-                  
+
                   // Доступные мастера
                   Text(
                     localizations.translate('available_masters'),
@@ -181,7 +166,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ),
-                  
+
                   // Список карточек мастеров
                   if (_availableMasters.isNotEmpty)
                     SizedBox(
@@ -212,7 +197,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                                       // Если бронирование было успешным, вернемся из всех экранов выбора
                                       if (result == true && mounted) {
                                         Navigator.of(context)
-                                          .popUntil((route) => route.isFirst || route.settings.name == '/appointments');
+                                            .popUntil((route) => route.isFirst || route.settings.name == '/appointments');
                                       }
                                     });
                                   } else {
@@ -238,7 +223,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.all(16.0),
         child: ElevatedButton(
-          onPressed: _availableMasters.isEmpty 
+          onPressed: _availableMasters.isEmpty
               ? null
               : () {
                   // Переход на экран бронирования с первым доступным мастером
@@ -254,11 +239,91 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                     // вернемся обратно на экран записей
                     if (result == true && widget.isForBooking && mounted) {
                       Navigator.of(context)
-                        .popUntil((route) => route.isFirst || route.settings.name == '/appointments');
+                          .popUntil((route) => route.isFirst || route.settings.name == '/appointments');
                     }
                   });
                 },
           child: Text(localizations.translate('book_service')),
+        ),
+      ),
+    );
+  }
+
+  // New method to handle service image display
+  Widget _buildServiceImage(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).primaryColor.withAlpha((0.1 * 255).round()),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Builder(
+          builder: (context) {
+            if (widget.service.photoBase64 == null || widget.service.photoBase64!.isEmpty) {
+              return Center(
+                child: Icon(
+                  Icons.spa,
+                  size: 50,
+                  color: Theme.of(context).primaryColor,
+                ),
+              );
+            }
+
+            try {
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.memory(
+                  base64Decode(widget.service.photoBase64!),
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    if (kDebugMode) {
+                      print('Error loading service image: $error');
+                      print('Stack trace: $stackTrace');
+                    }
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.broken_image,
+                            size: 50,
+                            color: Theme.of(context).primaryColor,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Could not load image',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              );
+            } catch (e) {
+              if (kDebugMode) {
+                print('Error decoding base64 image: $e');
+              }
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.broken_image,
+                      size: 50,
+                      color: Theme.of(context).primaryColor,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Invalid image format',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              );
+            }
+          },
         ),
       ),
     );

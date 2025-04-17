@@ -1,8 +1,10 @@
 // lib/screens/client/booking_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'dart:convert';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/service_model.dart';
@@ -195,8 +197,6 @@ class _BookingScreenState extends State<BookingScreen> {
           HomeScreen.homeKey.currentState!.setNeedRefreshAppointments();
         }
         
-
-        
         // Возвращаемся на предыдущий экран
         Navigator.of(context).pop(true);
       }
@@ -222,6 +222,14 @@ class _BookingScreenState extends State<BookingScreen> {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     final languageCode = Provider.of<LanguageService>(context).languageCode;
+
+    if (kDebugMode) {
+      print('Building booking screen');
+      print('Service photo available: ${widget.service.photoBase64 != null}');
+      if (widget.service.photoBase64 != null) {
+        print('Photo data length: ${widget.service.photoBase64!.length}');
+      }
+    }
     
     return LoadingOverlay(
       isLoading: _isLoading,
@@ -250,27 +258,7 @@ class _BookingScreenState extends State<BookingScreen> {
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            Container(
-                              width: 60,
-                              height: 60,
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
-                                borderRadius: BorderRadius.circular(8),
-                                image: widget.service.photoURL != null
-                                    ? DecorationImage(
-                                        image: NetworkImage(widget.service.photoURL!),
-                                        fit: BoxFit.cover,
-                                      )
-                                    : null,
-                              ),
-                              child: widget.service.photoURL == null
-                                ? Icon(
-                                    Icons.spa,
-                                    size: 30,
-                                    color: Theme.of(context).primaryColor,
-                                  )
-                                : null,
-                            ),
+                            _buildServicePhoto(context),
                             const SizedBox(width: 16),
                             Expanded(
                               child: Column(
@@ -367,10 +355,10 @@ class _BookingScreenState extends State<BookingScreen> {
                                   CircleAvatar(
                                     radius: 30,
                                     backgroundColor: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
-                                    backgroundImage: master.photoURL != null
-                                        ? NetworkImage(master.photoURL!)
+                                    backgroundImage: master.photoBase64 != null
+                                        ? MemoryImage(base64Decode(master.photoBase64!))
                                         : null,
-                                    child: master.photoURL == null
+                                    child: master.photoBase64 == null
                                         ? const Icon(Icons.person, size: 30, color: Colors.grey)
                                         : null,
                                   ),
@@ -524,6 +512,57 @@ class _BookingScreenState extends State<BookingScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // New method to handle service photo
+  Widget _buildServicePhoto(BuildContext context) {
+    return Container(
+      width: 60,
+      height: 60,
+      decoration: BoxDecoration(
+        color: Theme.of(context).primaryColor.withAlpha((0.1*255).round()),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Builder(
+        builder: (context) {
+          if (widget.service.photoBase64 == null || widget.service.photoBase64!.isEmpty) {
+            return Icon(
+              Icons.spa,
+              size: 30,
+              color: Theme.of(context).primaryColor,
+            );
+          }
+
+          try {
+            return Image.memory(
+              base64Decode(widget.service.photoBase64!),
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                if (kDebugMode) {
+                  print('Error loading service image: $error');
+                  print('Stack trace: $stackTrace');
+                }
+                return Icon(
+                  Icons.broken_image,
+                  size: 30,
+                  color: Theme.of(context).primaryColor,
+                );
+              },
+            );
+          } catch (e) {
+            if (kDebugMode) {
+              print('Error decoding base64 image: $e');
+            }
+            return Icon(
+              Icons.error_outline,
+              size: 30,
+              color: Theme.of(context).primaryColor,
+            );
+          }
+        },
       ),
     );
   }

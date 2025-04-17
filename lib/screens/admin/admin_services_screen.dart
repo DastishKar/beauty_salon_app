@@ -1,8 +1,10 @@
 // lib/screens/admin/admin_services_screen.dart
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:convert';
 
 import '../../models/service_model.dart';
 import '../../models/category_model.dart';
@@ -318,7 +320,7 @@ class _AdminServicesScreenState extends State<AdminServicesScreen> with SingleTi
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Фото услуги
+                // Фото услуги с улучшенной обработкой ошибок
                 GestureDetector(
                   onTap: () => _updateServicePhoto(service),
                   child: Container(
@@ -326,17 +328,47 @@ class _AdminServicesScreenState extends State<AdminServicesScreen> with SingleTi
                     height: 80,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(8),
-                      color: Colors.grey[200],
-                      image: service.photoURL != null
-                          ? DecorationImage(
-                              image: NetworkImage(service.photoURL!),
-                              fit: BoxFit.cover,
-                            )
-                          : null,
+                      color: Theme.of(context).primaryColor.withAlpha((0.1 * 255).round()),
                     ),
-                    child: service.photoURL == null
-                        ? const Icon(Icons.add_photo_alternate, size: 40, color: Colors.grey)
-                        : null,
+                    clipBehavior: Clip.antiAlias,
+                    child: Builder(
+                      builder: (context) {
+                        if (service.photoBase64 == null || service.photoBase64!.isEmpty) {
+                          return const Icon(
+                            Icons.add_photo_alternate,
+                            size: 40,
+                            color: Colors.grey,
+                          );
+                        }
+
+                        try {
+                          return Image.memory(
+                            base64Decode(service.photoBase64!),
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              if (kDebugMode) {
+                                print('Error loading service image: $error');
+                                print('Stack trace: $stackTrace');
+                              }
+                              return const Icon(
+                                Icons.broken_image,
+                                size: 40,
+                                color: Colors.red,
+                              );
+                            },
+                          );
+                        } catch (e) {
+                          if (kDebugMode) {
+                            print('Error decoding base64 image: $e');
+                          }
+                          return const Icon(
+                            Icons.error_outline,
+                            size: 40,
+                            color: Colors.red,
+                          );
+                        }
+                      },
+                    ),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -401,28 +433,43 @@ class _AdminServicesScreenState extends State<AdminServicesScreen> with SingleTi
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 // Кнопка обновления фото
-                OutlinedButton.icon(
+                IconButton(
                   onPressed: () => _updateServicePhoto(service),
                   icon: const Icon(Icons.photo_library),
-                  label: const Text('Фото'),
+                  style: IconButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    padding: const EdgeInsets.all(12),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 
                 // Кнопка редактирования
-                OutlinedButton.icon(
+                IconButton(
                   onPressed: () => _editService(service),
                   icon: const Icon(Icons.edit),
-                  label: const Text('Изменить'),
+                  style: IconButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    padding: const EdgeInsets.all(12),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 
                 // Кнопка удаления
-                OutlinedButton.icon(
+                IconButton(
                   onPressed: () => _deleteService(service),
                   icon: const Icon(Icons.delete, color: Colors.red),
-                  label: const Text(
-                    'Удалить',
-                    style: TextStyle(color: Colors.red),
+                  style: IconButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: const BorderSide(color: Colors.red),
+                    ),
+                    padding: const EdgeInsets.all(12),
                   ),
                 ),
               ],
